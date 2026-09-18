@@ -619,7 +619,7 @@ class CribbageGame {
             show(countBtn);
             countBtn.disabled = false;
             countBtn.textContent = 'COUNT HAND';
-        } else if (state.phase === 'COUNT_CRIB' && state.currentPlayer === this.dealerIndex) {
+        } else if (state.phase === 'COUNT_CRIB' && state.currentPlayer === this.localPlayerIndex) {
             show(countBtn);
             countBtn.disabled = false;
             countBtn.textContent = 'COUNT CRIB';

@@ -1596,6 +1596,7 @@ header.pixel-header::after {
         justify-content: center;
         gap: 8px;
         flex-wrap: wrap;
+        padding: 10px 10px 10px;
         padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
         background: linear-gradient(180deg, rgba(26, 26, 26, 0) 0%, rgba(26, 26, 26, 0.72) 28%);
         pointer-events: none;
