@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRIBBAGE SAFARI - Multiplayer Card Game</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="game-container">
+        <!-- Landing / Table Select Screen -->
+        <div id="landing-screen" class="screen active">
+            <div class="pixel-border">
+                <header class="pixel-header">
+                    <div class="logo">
+                        <span class="logo-icon">🦁</span>
+                        <h1>CRIBBAGE SAFARI</h1>
+                        <span class="logo-icon">🦓</span>
+                    </div>
+                    <p class="tagline">OLD SCHOOL 8-BIT MULTIPLAYER</p>
+                </header>
+                
+                <div class="mode-selector">
+                    <h2>SELECT GAME MODE</h2>
+                    <div class="mode-cards">
+                        <button class="mode-card" data-mode="1v1">
+                            <div class="mode-icon">🦒</div>
+                            <h3>HEAD-TO-HEAD</h3>
+                            <p>Classic 1v1 Cribbage</p>
+                            <span class="players">2 PLAYERS</span>
+                        </button>
+                        <button class="mode-card" data-mode="3player">
+                            <div class="mode-icon">🦏</div>
+                            <h3>SAFARI TRIO</h3>
+                            <p>3-Player Cribbage</p>
+                            <span class="players">3 PLAYERS</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-list" id="table-list">
+                    <h2>OPEN TABLES</h2>
+                    <div class="tables-grid" id="tables-grid">
+                        <div class="table-card empty">
+                            <div class="table-icon">🌴</div>
+                            <p>No tables yet</p>
+                            <button class="pixel-btn create-table-btn" id="create-table-btn">CREATE TABLE</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="player-setup">
+                    <h2>YOUR NAME</h2>
+                    <input type="text" id="player-name" placeholder="Enter your safari name..." maxlength="12">
+                    <button class="pixel-btn" id="join-btn">JOIN SAFARI</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Table Screen -->
+        <div id="game-screen" class="screen">
+            <div class="pixel-border">
+                <header class="game-header">
+                    <div class="table-info">
+                        <span class="table-id" id="table-id-display">TABLE #001</span>
+                        <span class="mode-badge" id="mode-badge">1v1</span>
+                    </div>
+                    <div class="connection-status">
+                        <span class="status-dot" id="status-dot"></span>
+                        <span id="status-text">CONNECTING...</span>
+                    </div>
+                </header>
+
+                <!-- Score Board / Crib Board -->
+                <div class="crib-board" id="crib-board">
+                    <div class="board-track" id="board-track">
+                        <!-- Pegs will be inserted here -->
+                    </div>
+                    <div class="board-info">
+                        <div class="player-score" id="player-scores"></div>
+                    </div>
+                </div>
+
+                <!-- Game Area -->
+                <div class="game-area">
+                    <!-- Opponent Areas (Top for 1v1, Top-Left/Top-Right for 3p) -->
+                    <div class="opponents-area" id="opponents-area">
+                        <!-- Opponent panels inserted dynamically -->
+                    </div>
+
+                    <!-- Center: Dealer, Crib, Community Cards -->
+                    <div class="center-area">
+                        <div class="dealer-zone" id="dealer-zone">
+                            <div class="dealer-chip" id="dealer-chip">
+                                <span class="chip-label">DEALER</span>
+                                <span class="chip-arrow">▼</span>
+                            </div>
+                            <div class="dealer-name" id="dealer-name">--</div>
+                        </div>
+                        
+                        <div class="crib-zone" id="crib-zone">
+                            <h3>CRIB</h3>
+                            <div class="crib-cards" id="crib-cards"></div>
+                            <div class="crib-count" id="crib-count">0</div>
+                        </div>
+
+                        <div class="starter-zone" id="starter-zone">
+                            <h3>STARTER</h3>
+                            <div class="starter-card" id="starter-card"></div>
+                        </div>
+                    </div>
+
+                    <!-- Player Hand (Bottom) -->
+                    <div class="player-area">
+                        <div class="hand-label">YOUR HAND</div>
+                        <div class="hand-cards" id="hand-cards"></div>
+                        <div class="hand-actions" id="hand-actions">
+                            <button class="pixel-btn action-btn" id="discard-btn" disabled>DISCARD TO CRIB</button>
+                            <button class="pixel-btn action-btn" id="play-btn" disabled>PLAY CARD</button>
+                            <button class "pixel-btn action-btn" id="go-btn" disabled>GO</button>
+                            <button class="pixel-btn action-btn" id="count-btn" disabled>COUNT HAND</button>
+                        </div>
+                        <div class="peg-display" id="peg-display">
+                            <span>YOUR PEGS: </span>
+                            <span class="peg-front" id="peg-front">0</span>
+                            <span class="peg-back" id="peg-back">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase Indicator -->
+                <div class="phase-indicator" id="phase-indicator">
+                    <span class="phase-label" id="phase-label">WAITING FOR PLAYERS</span>
+                    <span class="phase-sub" id="phase-sub"></span>
+                </div>
+
+                <!-- Chat / Log -->
+                <div class="game-log" id="game-log">
+                    <div class="log-header">SAFARI LOG</div>
+                    <div class="log-messages" id="log-messages"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Overlays -->
+        <div id="modal-overlay" class="modal-overlay hidden">
+            <div class="modal pixel-border" id="modal">
+                <div class="modal-header" id="modal-header">NOTIFICATION</div>
+                <div class="modal-content" id="modal-content"></div>
+                <div class="modal-actions" id="modal-actions"></div>
+            </div>
+        </div>
+
+        <!-- Discard Selection Modal -->
+        <div id="discard-modal" class="modal-overlay hidden">
+            <div class="modal pixel-border discard-modal">
+                <div class="modal-header">SELECT CARDS FOR CRIB</div>
+                <div class="modal-content">
+                    <p id="discard-instruction">Choose <span id="discard-count">2</span> cards to discard</p>
+                    <div class="discard-preview" id="discard-preview"></div>
+                </div>
+                <div class="modal-actions">
+                    <button class="pixel-btn" id="confirm-discard" disabled>CONFIRM</button>
+                    <button class="pixel-btn secondary" id="cancel-discard">CANCEL</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+    <script src="network.js"></script>
+    <script src="cribbage-engine.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
