@@ -414,15 +414,27 @@ class CribbageGame {
         }).join('');
 
         // Use event delegation on container for more reliable clicking
+        // Use event delegation on container for more reliable clicking
         container.onclick = (e) => {
             console.log('CONTAINER ONCLICK FIRED:', e.target.tagName, e.target.className);
             const cardEl = e.target.closest('.card');
             console.log('CLOSEST CARD:', cardEl);
             if (cardEl && cardEl.parentElement === container) {
                 console.log('Container click on card:', cardEl.dataset.index);
+                alert('CARD CLICKED! Index: ' + cardEl.dataset.index); // FORCE VISIBLE FEEDBACK
                 this.onCardClick(cardEl);
             }
         };
+        
+        // ALSO add direct click on each card as backup
+        container.querySelectorAll('.card').forEach(cardEl => {
+            cardEl.onclick = (e) => {
+                console.log('DIRECT CARD ONCLICK:', cardEl.dataset.index);
+                alert('DIRECT CARD CLICK! Index: ' + cardEl.dataset.index);
+                this.onCardClick(cardEl);
+                e.stopPropagation();
+            };
+        });
     }
 
     onCardClick(cardEl) {
