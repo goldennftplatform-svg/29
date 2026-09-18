@@ -388,7 +388,7 @@ class CribbageGame {
             const card = Card.fromString(cardStr);
             const isSelected = this.selectedCards.has(idx);
             const isDiscardSelected = this.discardSelection.has(idx);
-            const disabled = (state.phase === 'PLAY' && (!state.canPlay || this.playCount + card.value > 31)) ||
+            const disabled = (state.phase === 'PLAY' && (!state.canPlay || state.playCount + card.value > 31)) ||
                            (state.phase === 'DISCARD' && !state.canDiscard);
             
             return `
@@ -400,13 +400,15 @@ class CribbageGame {
             `;
         }).join('');
 
-        // Add click handlers
+        // Add click handlers - read current state from engine at click time
         container.querySelectorAll('.card').forEach(cardEl => {
-            cardEl.addEventListener('click', () => this.onCardClick(cardEl, state));
+            cardEl.addEventListener('click', (e) => this.onCardClick(e.currentTarget));
         });
     }
 
-    onCardClick(cardEl, state) {
+    onCardClick(cardEl) {
+        // Read current state from engine at click time
+        const state = this.engine.getState(this.localPlayerIndex);
         const idx = parseInt(cardEl.dataset.index);
         const cardStr = cardEl.dataset.card;
 
@@ -438,6 +440,7 @@ class CribbageGame {
     }
 
     updateDiscardButton(state) {
+        if (!state) state = this.engine.getState(this.localPlayerIndex);
         const btn = document.getElementById('confirm-discard');
         const countEl = document.getElementById('discard-count');
         const preview = document.getElementById('discard-preview');
