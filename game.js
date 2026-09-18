@@ -142,6 +142,7 @@ class CribbageGame {
     }
 
     setupLocalGame(mode, playerName) {
+        console.log('setupLocalGame:', { mode, playerName });
         const playerCount = mode === '1v1' ? 2 : 3;
         this.engine = new CribbageEngine(playerCount);
         
@@ -159,6 +160,7 @@ class CribbageGame {
         
         this.localPlayerIndex = 0;
         this.engine.setLocalPlayerIndex(0);
+        console.log('Starting game, localPlayerIndex:', this.localPlayerIndex);
         this.engine.startGame();
         
         this.joinLocalGame();
@@ -170,6 +172,7 @@ class CribbageGame {
     }
 
     joinLocalGame() {
+        console.log('joinLocalGame called');
         document.getElementById('landing-screen').classList.remove('active');
         document.getElementById('game-screen').classList.add('active');
         
@@ -179,6 +182,7 @@ class CribbageGame {
         document.getElementById('status-text').textContent = 'LOCAL GAME';
         
         const state = this.engine.getState(this.localPlayerIndex);
+        console.log('Initial state from engine:', state);
         this.renderGameState(state);
         
         this.addLogEntry('Welcome to the Savannah! 🦁', 'system');
@@ -242,6 +246,7 @@ class CribbageGame {
     }
 
     renderGameState(state) {
+        console.log('renderGameState:', { phase: state.phase, currentPlayer: state.currentPlayer, dealerIndex: state.dealerIndex, players: state.players.map(p => p.name), localPlayerIndex: this.localPlayerIndex });
         // Update mode badge
         const mode = state.players.length === 2 ? '1v1' : '3P';
         document.getElementById('mode-badge').textContent = mode;
@@ -381,7 +386,7 @@ class CribbageGame {
     }
 
     renderPlayerHand(state) {
-        console.log('renderPlayerHand:', { phase: state.phase, hand: state.hand, canDiscard: state.canDiscard, canPlay: state.canPlay, playCount: state.playCount, currentPlayer: state.currentPlayer, localPlayerIndex: this.localPlayerIndex });
+        console.log('renderPlayerHand:', { phase: state.phase, hand: state.hand, canDiscard: state.canDiscard, canPlay: state.canPlay, playCount: state.playCount, currentPlayer: state.currentPlayer, localPlayerIndex: this.localPlayerIndex, discardCount: state.discardCount });
         
         const hand = state.hand || [];
         const container = document.getElementById('hand-cards');
@@ -396,16 +401,21 @@ class CribbageGame {
             return `
                 <div class="card ${card.color} ${isSelected ? 'selected' : ''} ${isDiscardSelected ? 'discard-selected' : ''} ${disabled ? 'disabled' : ''}" 
                      data-index="${idx}" 
-                     data-card="${cardStr}">
+                     data-card="${cardStr}"
+                     style="pointer-events: auto;">
                     ${this.renderCardHtml(card)}
                 </div>
             `;
         }).join('');
 
-        // Add click handlers - read current state from engine at click time
-        container.querySelectorAll('.card').forEach(cardEl => {
-            cardEl.addEventListener('click', (e) => this.onCardClick(e.currentTarget));
-        });
+        // Use event delegation on container for more reliable clicking
+        container.onclick = (e) => {
+            const cardEl = e.target.closest('.card');
+            if (cardEl && cardEl.parentElement === container) {
+                console.log('Container click on card:', cardEl.dataset.index);
+                this.onCardClick(cardEl);
+            }
+        };
     }
 
     onCardClick(cardEl) {
