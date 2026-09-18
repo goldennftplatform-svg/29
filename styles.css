@@ -1576,14 +1576,36 @@ header.pixel-header::after {
     .pd-feed { max-height: 44px; }
     .pd-feed-item { font-size: 11px; }
 
-    .player-area { padding: 10px 8px; gap: 8px; }
+    .player-area { padding: 10px 8px; gap: 8px; padding-bottom: 76px; }
     .hand-label { font-size: 8px; }
     .hand-cards { gap: 3px; min-height: 62px; }
     .card { width: 42px; height: 60px; }
     .card-rank { font-size: 12px; }
     .card-suit { font-size: 18px; }
     .turn-status { font-size: 8px; min-height: 20px; line-height: 1.5; }
-    .hand-actions { gap: 6px; }
+
+    /* Action buttons: pinned bottom bar on phones so the active
+       turn's action (DISCARD / PLAY / GO / COUNT HAND) is always visible */
+    .hand-actions {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 30;
+        display: none;
+        justify-content: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+        background: linear-gradient(180deg, rgba(26, 26, 26, 0) 0%, rgba(26, 26, 26, 0.72) 28%);
+        pointer-events: none;
+    }
+    .hand-actions.has-action { display: flex; }
+    .hand-actions .action-btn {
+        pointer-events: auto;
+        box-shadow: var(--pixel-shadow);
+        min-width: 120px;
+    }
     .action-btn { font-size: 7px !important; padding: 9px 12px !important; }
     .peg-display { font-size: 8px; gap: 6px; }
 

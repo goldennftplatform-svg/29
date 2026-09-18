@@ -513,7 +513,8 @@ class CribbageGame {
             }
         } else if (state.phase === 'COUNT_HAND' || state.phase === 'COUNT_CRIB') {
             if (state.currentPlayer === this.localPlayerIndex) {
-                bar.textContent = 'YOUR TURN — CLICK "COUNT HAND"';
+                const actionLabel = state.phase === 'COUNT_CRIB' ? 'COUNT CRIB' : 'COUNT HAND';
+                bar.textContent = `YOUR TURN — CLICK "${actionLabel}"`;
                 bar.className = 'turn-status yours';
             } else {
                 bar.textContent = `${state.players[state.currentPlayer]?.name || 'OPPONENT'} IS COUNTING...`;
@@ -584,18 +585,27 @@ class CribbageGame {
         const playBtn = document.getElementById('play-btn');
         const goBtn = document.getElementById('go-btn');
         const countBtn = document.getElementById('count-btn');
+        const actionsBar = document.getElementById('hand-actions');
 
         // Hide all by default
         [discardBtn, playBtn, goBtn, countBtn].forEach(btn => {
             if (btn) btn.style.display = 'none';
         });
+        if (actionsBar) actionsBar.classList.remove('has-action');
+
+        let anyVisible = false;
+        const show = (btn) => {
+            if (!btn) return;
+            btn.style.display = 'inline-block';
+            anyVisible = true;
+        };
 
         if (state.phase === 'DISCARD' && state.canDiscard) {
-            discardBtn.style.display = 'inline-block';
+            show(discardBtn);
             discardBtn.disabled = this.discardSelection.size !== state.discardCount;
         } else if (state.phase === 'PLAY' && state.canPlay) {
-            playBtn.style.display = 'inline-block';
-            goBtn.style.display = 'inline-block';
+            show(playBtn);
+            show(goBtn);
             
             const hand = state.hand || [];
             const canPlayAny = hand.some((cardStr, i) => {
@@ -606,14 +616,16 @@ class CribbageGame {
             playBtn.disabled = !canPlayAny;
             goBtn.disabled = canPlayAny;
         } else if (state.phase === 'COUNT_HAND' && state.currentPlayer === this.localPlayerIndex) {
-            countBtn.style.display = 'inline-block';
+            show(countBtn);
             countBtn.disabled = false;
             countBtn.textContent = 'COUNT HAND';
         } else if (state.phase === 'COUNT_CRIB' && state.currentPlayer === this.dealerIndex) {
-            countBtn.style.display = 'inline-block';
+            show(countBtn);
             countBtn.disabled = false;
             countBtn.textContent = 'COUNT CRIB';
         }
+
+        if (anyVisible && actionsBar) actionsBar.classList.add('has-action');
     }
 
     renderPhaseIndicator(state) {
