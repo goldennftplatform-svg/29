@@ -521,17 +521,29 @@ class CribbageEngine {
     proceedToNextCount() {
         if (this.phase === 'COUNT_HAND') {
             // Count current player's hand
+            const handWho = this.currentPlayerIndex;
             const result = this.countHand(this.currentPlayerIndex);
             this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.playerCount;
             
             if (this.currentPlayerIndex === this.dealerIndex) {
                 // Count dealer's hand
                 const dealerResult = this.countHand(this.dealerIndex);
-                this.currentPlayerIndex = (this.dealerIndex + 1) % this.playerCount;
+                // The dealer counts the crib next, so the dealer is the
+                // acting player during COUNT_CRIB (the UI's count button
+                // reads state.currentPlayer for whose turn it is).
+                this.currentPlayerIndex = this.dealerIndex;
                 this.phase = 'COUNT_CRIB';
+                return {
+                    phase: this.phase,
+                    currentPlayer: this.currentPlayerIndex,
+                    handResult: result,
+                    handPlayer: handWho,
+                    dealerResult,
+                    dealerPlayer: this.dealerIndex
+                };
             }
             
-            return { phase: this.phase, currentPlayer: this.currentPlayerIndex };
+            return { phase: this.phase, currentPlayer: this.currentPlayerIndex, handResult: result, handPlayer: handWho };
         } else if (this.phase === 'COUNT_CRIB') {
             const result = this.countHand(this.dealerIndex, true);
             this.endRound();

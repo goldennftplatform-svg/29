@@ -853,6 +853,29 @@ header.pixel-header::after {
     align-items: flex-end;
 }
 
+.turn-status {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 9px;
+    color: var(--safari-dark-sand);
+    padding: 6px 0;
+    min-height: 22px;
+    line-height: 1.6;
+}
+
+.turn-status.yours {
+    color: var(--safari-green);
+    animation: statusPulse 1.2s infinite;
+}
+
+.turn-status.waiting {
+    color: var(--safari-dark-sand);
+}
+
+@keyframes statusPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
 .card {
     width: 52px;
     height: 74px;
@@ -879,6 +902,13 @@ header.pixel-header::after {
 .card.selected {
     transform: translateY(-16px);
     border-color: var(--safari-gold);
+    box-shadow: 0 20px 0 -4px var(--safari-black), 0 0 0 3px var(--safari-gold), var(--pixel-shadow-sm);
+}
+
+.card.discard-selected {
+    transform: translateY(-16px);
+    border-color: var(--safari-gold);
+    background: var(--safari-light-sand);
     box-shadow: 0 20px 0 -4px var(--safari-black), 0 0 0 3px var(--safari-gold), var(--pixel-shadow-sm);
 }
 

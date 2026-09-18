@@ -142,7 +142,6 @@ class CribbageGame {
     }
 
     setupLocalGame(mode, playerName) {
-        console.log('setupLocalGame:', { mode, playerName });
         const playerCount = mode === '1v1' ? 2 : 3;
         this.engine = new CribbageEngine(playerCount);
         
@@ -160,7 +159,6 @@ class CribbageGame {
         
         this.localPlayerIndex = 0;
         this.engine.setLocalPlayerIndex(0);
-        console.log('Starting game, localPlayerIndex:', this.localPlayerIndex);
         this.engine.startGame();
         
         this.joinLocalGame();
@@ -172,7 +170,6 @@ class CribbageGame {
     }
 
     joinLocalGame() {
-        console.log('joinLocalGame called');
         document.getElementById('landing-screen').classList.remove('active');
         document.getElementById('game-screen').classList.add('active');
         
@@ -182,16 +179,10 @@ class CribbageGame {
         document.getElementById('status-text').textContent = 'LOCAL GAME';
         
         const state = this.engine.getState(this.localPlayerIndex);
-        console.log('Initial state from engine:', state);
         this.renderGameState(state);
         
         this.addLogEntry('Welcome to the Savannah! 🦁', 'system');
         this.checkAITurn(state);
-        
-        // Global click debug
-        document.addEventListener('click', (e) => {
-            console.log('GLOBAL CLICK:', e.target.tagName, e.target.className, e.target.id);
-        }, true);
     }
 
     joinTable(tableId) {
@@ -251,7 +242,6 @@ class CribbageGame {
     }
 
     renderGameState(state) {
-        console.log('renderGameState:', { phase: state.phase, currentPlayer: state.currentPlayer, dealerIndex: state.dealerIndex, players: state.players.map(p => p.name), localPlayerIndex: this.localPlayerIndex });
         // Update mode badge
         const mode = state.players.length === 2 ? '1v1' : '3P';
         document.getElementById('mode-badge').textContent = mode;
@@ -391,8 +381,6 @@ class CribbageGame {
     }
 
     renderPlayerHand(state) {
-        console.log('renderPlayerHand:', { phase: state.phase, hand: state.hand, canDiscard: state.canDiscard, canPlay: state.canPlay, playCount: state.playCount, currentPlayer: state.currentPlayer, localPlayerIndex: this.localPlayerIndex, discardCount: state.discardCount });
-        
         const hand = state.hand || [];
         const container = document.getElementById('hand-cards');
         
@@ -414,27 +402,52 @@ class CribbageGame {
         }).join('');
 
         // Use event delegation on container for more reliable clicking
-        // Use event delegation on container for more reliable clicking
         container.onclick = (e) => {
-            console.log('CONTAINER ONCLICK FIRED:', e.target.tagName, e.target.className);
             const cardEl = e.target.closest('.card');
-            console.log('CLOSEST CARD:', cardEl);
-            if (cardEl && cardEl.parentElement === container) {
-                console.log('Container click on card:', cardEl.dataset.index);
-                alert('CARD CLICKED! Index: ' + cardEl.dataset.index); // FORCE VISIBLE FEEDBACK
+            if (cardEl && container.contains(cardEl)) {
                 this.onCardClick(cardEl);
             }
         };
+
+        // Update the turn status bar on screen
+        this.renderTurnStatus(state);
+    }
+
+    renderTurnStatus(state) {
+        const bar = document.getElementById('turn-status');
+        if (!bar) return;
         
-        // ALSO add direct click on each card as backup
-        container.querySelectorAll('.card').forEach(cardEl => {
-            cardEl.onclick = (e) => {
-                console.log('DIRECT CARD ONCLICK:', cardEl.dataset.index);
-                alert('DIRECT CARD CLICK! Index: ' + cardEl.dataset.index);
-                this.onCardClick(cardEl);
-                e.stopPropagation();
-            };
-        });
+        if (state.phase === 'DISCARD') {
+            if (state.canDiscard) {
+                const remaining = state.discardCount - this.discardSelection.size;
+                bar.textContent = remaining > 0 
+                    ? `YOUR TURN — SELECT ${remaining > 1 ? remaining + ' CARDS' : '1 CARD'} FOR CRIB`
+                    : 'CLICK "DISCARD TO CRIB" TO CONTINUE';
+                bar.className = 'turn-status yours';
+            } else {
+                bar.textContent = `${state.players[state.currentPlayer]?.name || 'OPPONENT'} IS DISCARDING...`;
+                bar.className = 'turn-status waiting';
+            }
+        } else if (state.phase === 'PLAY') {
+            if (state.canPlay) {
+                bar.textContent = `YOUR TURN — CLICK A CARD TO PLAY (COUNT ${state.playCount}/31)`;
+                bar.className = 'turn-status yours';
+            } else {
+                bar.textContent = `${state.players[state.currentPlayer]?.name || 'OPPONENT'} IS PLAYING — WAIT (COUNT ${state.playCount}/31)`;
+                bar.className = 'turn-status waiting';
+            }
+        } else if (state.phase === 'COUNT_HAND' || state.phase === 'COUNT_CRIB') {
+            if (state.currentPlayer === this.localPlayerIndex) {
+                bar.textContent = 'YOUR TURN — CLICK "COUNT HAND"';
+                bar.className = 'turn-status yours';
+            } else {
+                bar.textContent = `${state.players[state.currentPlayer]?.name || 'OPPONENT'} IS COUNTING...`;
+                bar.className = 'turn-status waiting';
+            }
+        } else {
+            bar.textContent = state.phase === 'GAME_OVER' ? 'GAME OVER' : (state.phase || '');
+            bar.className = 'turn-status';
+        }
     }
 
     onCardClick(cardEl) {
@@ -443,8 +456,6 @@ class CribbageGame {
         const idx = parseInt(cardEl.dataset.index);
         const cardStr = cardEl.dataset.card;
         
-        console.log('Card clicked:', { idx, cardStr, phase: state.phase, canDiscard: state.canDiscard, canPlay: state.canPlay, playCount: state.playCount, localPlayerIndex: this.localPlayerIndex, currentPlayer: state.currentPlayer });
-
         if (state.phase === 'DISCARD' && state.canDiscard) {
             // Toggle discard selection
             if (this.discardSelection.has(idx)) {
@@ -457,6 +468,7 @@ class CribbageGame {
                 }
             }
             this.updateDiscardButton(state);
+            this.renderTurnStatus(state);
         } else if (state.phase === 'PLAY' && state.canPlay) {
             // Play card
             this.playCard(idx);
@@ -474,11 +486,14 @@ class CribbageGame {
 
     updateDiscardButton(state) {
         if (!state) state = this.engine.getState(this.localPlayerIndex);
-        const btn = document.getElementById('confirm-discard');
+        const ready = this.discardSelection.size === state.discardCount;
+        const inlineBtn = document.getElementById('discard-btn');
+        const modalBtn = document.getElementById('confirm-discard');
         const countEl = document.getElementById('discard-count');
         const preview = document.getElementById('discard-preview');
         
-        if (btn) btn.disabled = this.discardSelection.size !== state.discardCount;
+        if (inlineBtn) inlineBtn.disabled = !ready;
+        if (modalBtn) modalBtn.disabled = !ready;
         if (countEl) countEl.textContent = state.discardCount - this.discardSelection.size;
         
         if (preview) {
@@ -517,9 +532,11 @@ class CribbageGame {
             goBtn.disabled = canPlayAny;
         } else if (state.phase === 'COUNT_HAND' && state.currentPlayer === this.localPlayerIndex) {
             countBtn.style.display = 'inline-block';
+            countBtn.disabled = false;
             countBtn.textContent = 'COUNT HAND';
         } else if (state.phase === 'COUNT_CRIB' && state.currentPlayer === this.dealerIndex) {
             countBtn.style.display = 'inline-block';
+            countBtn.disabled = false;
             countBtn.textContent = 'COUNT CRIB';
         }
     }
@@ -583,15 +600,37 @@ class CribbageGame {
         }
     }
 
+    async playBestCard() {
+        const state = this.engine.getState(this.localPlayerIndex);
+        if (state.phase !== 'PLAY' || !state.canPlay) return;
+
+        const hand = state.hand || [];
+        // Find the highest-value card that keeps the running count <= 31
+        let bestIdx = -1;
+        hand.forEach((cardStr, i) => {
+            const card = Card.fromString(cardStr);
+            if (state.playCount + card.value <= 31) {
+                if (bestIdx === -1 || card.value > Card.fromString(hand[bestIdx]).value) {
+                    bestIdx = i;
+                }
+            }
+        });
+
+        if (bestIdx !== -1 && hand[bestIdx]) {
+            await this.playCard(bestIdx);
+        }
+    }
+
     async playCard(cardIndex) {
+        const handArr = this.engine.hands[this.localPlayerIndex] || [];
+        const playedCard = handArr[cardIndex] ? handArr[cardIndex].toString() : '';
         const result = this.engine.playCard(this.localPlayerIndex, cardIndex);
         
         if (result.success) {
             this.selectedCards.clear();
             this.broadcastState();
             
-            const card = Card.fromString(this.engine.hands[this.localPlayerIndex][cardIndex]?.toString() || '');
-            this.addLogEntry(`You played ${card} (count: ${result.playCount})`, 'action');
+            this.addLogEntry(`You played ${playedCard} (count: ${result.playCount})`, 'action');
             
             if (result.scoreResult?.points > 0) {
                 this.addLogEntry(`Scored ${result.scoreResult.points}: ${result.scoreResult.reasons.join(', ')}`, 'score');
@@ -617,30 +656,45 @@ class CribbageGame {
     }
 
     async countHand() {
-        if (this.engine.phase === 'COUNT_HAND') {
-            const result = this.engine.countHand(this.localPlayerIndex);
-            this.addLogEntry(`Hand counted: ${result.breakdown.join('; ')} (${result.points} pts)`, 'score');
-        } else if (this.engine.phase === 'COUNT_CRIB') {
-            const result = this.engine.countHand(this.engine.dealerIndex, true);
-            this.addLogEntry(`Crib counted: ${result.breakdown.join('; ')} (${result.points} pts)`, 'score');
+        if (this.engine.phase === 'COUNT_HAND' || this.engine.phase === 'COUNT_CRIB') {
+            const r = this.engine.proceedToNextCount();
+            if (r.handResult) {
+                const who = this.engine.players[r.handPlayer].name;
+                const desc = r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : 'no points';
+                this.addLogEntry(`${who} counted hand: ${desc} (${r.handResult.points} pts)`, 'score');
+            }
+            if (r.dealerResult) {
+                const who = this.engine.players[r.dealerPlayer].name;
+                const desc = r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : 'no points';
+                this.addLogEntry(`${who} counted hand: ${desc} (${r.dealerResult.points} pts)`, 'score');
+            }
+            if (r.cribResult) {
+                const desc = r.cribResult.breakdown.length ? r.cribResult.breakdown.join('; ') : 'no points';
+                this.addLogEntry(`Crib counted: ${desc} (${r.cribResult.points} pts)`, 'score');
+            }
         }
         
         this.broadcastState();
-        
-        // Auto-proceed
-        setTimeout(() => {
-            this.engine.proceedToNextCount();
-            this.broadcastState();
-        }, 2000);
     }
 
     broadcastState() {
         const state = this.engine.getState(this.localPlayerIndex);
         if (this.isSinglePlayer) {
-            this.handleStateUpdate(state);
-            this.checkAITurn(state);
+            // Single-player: the engine is the single source of truth. Do NOT
+            // run handleStateUpdate here — it wipes non-local hands to [] and
+            // deadlocks the AI. Auto-advance STARTER -> PLAY, then re-render.
+            this.autoAdvancePhase();
+            const fresh = this.engine.getState(this.localPlayerIndex);
+            this.renderGameState(fresh);
+            this.checkAITurn(fresh);
         } else {
             this.network.broadcastState(state);
+        }
+    }
+
+    autoAdvancePhase() {
+        if (this.engine.phase === 'STARTER') {
+            this.engine.startPlayPhase();
         }
     }
 
@@ -650,7 +704,6 @@ checkAITurn(state) {
         if (state.phase === 'GAME_OVER') return;
 
         const currentPlayer = state.currentPlayer;
-        console.log('checkAITurn:', { currentPlayer, aiPlayers: Array.from(this.aiPlayers.keys()), phase: state.phase });
         
         if (this.aiPlayers.has(currentPlayer)) {
             this.aiThinking = true;
@@ -660,7 +713,6 @@ checkAITurn(state) {
     }
 
     async makeAIMove(aiIndex, state) {
-        console.log('makeAIMove:', { aiIndex, phase: state.phase });
         const ai = this.aiPlayers.get(aiIndex);
         if (!ai) {
             this.aiThinking = false;
@@ -683,6 +735,7 @@ checkAITurn(state) {
         }
 
         this.aiThinking = false;
+        this.autoAdvancePhase();
         const newState = this.engine.getState(this.localPlayerIndex);
         this.renderGameState(newState);
         this.checkAITurn(newState);
@@ -693,10 +746,15 @@ checkAITurn(state) {
         const discardCount = state.discardCount;
         const discardIndices = ai.chooseDiscard(hand, isDealer, this.engine.starter, this.engine.playerCount);
         
+        // Capture the discarded card strings BEFORE the engine splices them out
+        const discardedCards = discardIndices
+            .filter(i => i >= 0 && i < hand.length)
+            .map(i => hand[i].toString())
+            .join(', ');
+        
         const result = this.engine.discardToCrib(aiIndex, discardIndices.sort((a, b) => b - a));
         
         if (result.success) {
-            const discardedCards = discardIndices.map(i => hand[i].toString()).join(', ');
             this.addLogEntry(`${aiName} discarded ${discardCount} card(s) to the crib`, 'action');
         }
     }
@@ -718,10 +776,11 @@ checkAITurn(state) {
             return;
         }
 
+        // Capture before the engine splices the card out of the hand
+        const playedCard = hand[cardIndex] ? hand[cardIndex].toString() : '';
         const result = this.engine.playCard(aiIndex, cardIndex);
         if (result.success) {
-            const card = hand[cardIndex];
-            this.addLogEntry(`${aiName} played ${card} (count: ${result.playCount})`, 'action');
+            this.addLogEntry(`${aiName} played ${playedCard} (count: ${result.playCount})`, 'action');
             if (result.scoreResult?.points > 0) {
                 this.addLogEntry(`${aiName} scored ${result.scoreResult.points}: ${result.scoreResult.reasons.join(', ')}`, 'score');
             }
@@ -732,21 +791,25 @@ checkAITurn(state) {
     }
 
     async aiCount(ai, aiIndex, aiName, state) {
-        if (state.phase === 'COUNT_HAND') {
-            const result = this.engine.countHand(aiIndex);
-            this.addLogEntry(`${aiName} counted hand: ${result.breakdown.join('; ')} (${result.points} pts)`, 'score');
-        } else if (state.phase === 'COUNT_CRIB') {
-            const result = this.engine.countHand(this.engine.dealerIndex, true);
-            this.addLogEntry(`${aiName} counted crib: ${result.breakdown.join('; ')} (${result.points} pts)`, 'score');
+        if (state.phase === 'COUNT_HAND' || state.phase === 'COUNT_CRIB') {
+            const r = this.engine.proceedToNextCount();
+            if (r.handResult) {
+                const who = this.engine.players[r.handPlayer].name;
+                const desc = r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : 'no points';
+                this.addLogEntry(`${who} counted hand: ${desc} (${r.handResult.points} pts)`, 'score');
+            }
+            if (r.dealerResult) {
+                const who = this.engine.players[r.dealerPlayer].name;
+                const desc = r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : 'no points';
+                this.addLogEntry(`${who} counted hand: ${desc} (${r.dealerResult.points} pts)`, 'score');
+            }
+            if (r.cribResult) {
+                const desc = r.cribResult.breakdown.length ? r.cribResult.breakdown.join('; ') : 'no points';
+                this.addLogEntry(`Crib counted: ${desc} (${r.cribResult.points} pts)`, 'score');
+            }
         }
 
-        // Auto-proceed after counting
-        setTimeout(() => {
-            this.engine.proceedToNextCount();
-            const newState = this.engine.getState(this.localPlayerIndex);
-            this.renderGameState(newState);
-            this.checkAITurn(newState);
-        }, 1500);
+        // makeAIMove re-renders and drives checkAITurn after this returns.
     }
 
     addLogEntry(message, type = 'system') {

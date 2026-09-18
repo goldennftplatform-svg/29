@@ -59,14 +59,15 @@ function setupEventListeners() {
         game.hideDiscardModal();
     });
 
+    // Inline discard-to-crib button (the primary discard flow)
+    document.getElementById('discard-btn')?.addEventListener('click', () => {
+        game.discardToCrib();
+    });
+
     // Action buttons
     document.getElementById('play-btn')?.addEventListener('click', () => {
-        // Play selected card
-        const selected = document.querySelector('.hand-cards .card.selected');
-        if (selected) {
-            const idx = parseInt(selected.dataset.index);
-            game.playCard(idx);
-        }
+        // Play the best (highest) legal card; cards can also be clicked directly
+        game.playBestCard();
     });
 
     document.getElementById('go-btn')?.addEventListener('click', () => {
