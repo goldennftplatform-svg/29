@@ -187,6 +187,11 @@ class CribbageGame {
         
         this.addLogEntry('Welcome to the Savannah! 🦁', 'system');
         this.checkAITurn(state);
+        
+        // Global click debug
+        document.addEventListener('click', (e) => {
+            console.log('GLOBAL CLICK:', e.target.tagName, e.target.className, e.target.id);
+        }, true);
     }
 
     joinTable(tableId) {
@@ -410,7 +415,9 @@ class CribbageGame {
 
         // Use event delegation on container for more reliable clicking
         container.onclick = (e) => {
+            console.log('CONTAINER ONCLICK FIRED:', e.target.tagName, e.target.className);
             const cardEl = e.target.closest('.card');
+            console.log('CLOSEST CARD:', cardEl);
             if (cardEl && cardEl.parentElement === container) {
                 console.log('Container click on card:', cardEl.dataset.index);
                 this.onCardClick(cardEl);
