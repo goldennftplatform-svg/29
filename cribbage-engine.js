@@ -80,12 +80,14 @@ class CribbageEngine {
         this.goCount = 0;
         this.hands = [];
         this.winner = null;
+        this.roundStartScores = [];
     }
 
     addPlayer(name, id) {
         if (this.players.length >= this.playerCount) return false;
         this.players.push({ id, name, connected: true });
         this.scores.push(0);
+        this.roundStartScores.push(0);
         this.pegs.push([0, 0]); // [front, back]
         this.hands.push([]);
         return true;
@@ -107,6 +109,7 @@ class CribbageEngine {
 
     newRound() {
         this.phase = 'DEALING';
+        this.roundStartScores = [...this.scores];
         this.crib = [];
         this.starter = null;
         this.playPile = [];
@@ -310,7 +313,8 @@ class CribbageEngine {
         // 15s and 31s
         const sum = cards.reduce((s, c) => s + c.value, 0);
         if (sum === 15) { points += 2; reasons.push('15 for 2'); }
-        else if (sum === 31) { points += 2; reasons.push('31 for 2'); }
+        // NOTE: a 31 is NOT scored here — playCard() awards the '31 for 2' itself.
+        // Scoring both would double-count a 31 as 4 points.
 
         // Pairs, trips, quads
         const lastCard = cards[cards.length - 1];
@@ -583,6 +587,7 @@ class CribbageEngine {
             playPile: this.playPile.map(p => ({ card: p.card.toString(), player: p.player })),
             playCount: this.playCount,
             scores: [...this.scores],
+            roundStart: [...this.roundStartScores],
             winner: this.winner
         };
 

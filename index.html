@@ -80,10 +80,10 @@
                     </div>
                 </header>
 
-                <!-- Score Board / Crib Board -->
+                <!-- Score Board / Crib Board (track shaped as "29") -->
                 <div class="crib-board" id="crib-board">
-                    <div class="board-track" id="board-track">
-                        <!-- Pegs will be inserted here -->
+                    <div class="board-wrap">
+                        <svg class="peg-board" id="board-track" viewBox="0 0 860 520" preserveAspectRatio="xMidYMid meet"></svg>
                     </div>
                     <div class="board-info">
                         <div class="player-score" id="player-scores"></div>
@@ -116,6 +116,28 @@
                         <div class="starter-zone" id="starter-zone">
                             <h3>STARTER</h3>
                             <div class="starter-card" id="starter-card"></div>
+                        </div>
+                    </div>
+
+                    <!-- Play Dashboard -->
+                    <div class="play-dashboard" id="play-dashboard" hidden>
+                        <div class="pd-block pd-count-block">
+                            <div class="pd-title">RUNNING COUNT</div>
+                            <div class="pd-count-num"><b id="pd-count-val">0</b><span id="pd-count-total">/31</span></div>
+                            <div class="pd-turn-num" id="pd-turn">—</div>
+                        </div>
+                        <div class="pd-block pd-pile-block">
+                            <div class="pd-title">PLAY PILE</div>
+                            <div class="pd-pile-cards" id="pd-pile-cards"></div>
+                        </div>
+                        <div class="pd-block pd-last-block">
+                            <div class="pd-title">LAST SCORE</div>
+                            <div class="pd-last" id="pd-last">—</div>
+                            <div class="pd-feed" id="pd-feed"></div>
+                        </div>
+                        <div class="pd-block pd-scores-block">
+                            <div class="pd-title">SCORES</div>
+                            <div class="pd-scores" id="pd-scores"></div>
                         </div>
                     </div>
 

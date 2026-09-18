@@ -11,6 +11,11 @@ class CribbageGame {
         this.aiPlayers = new Map(); // playerIndex -> CribbageAI
         this.aiThinking = false;
         this.isSinglePlayer = false;
+        this.scoreFeed = [];
+        this.lastScoreEvent = null;
+        this.lastFlashedKey = '';
+        this.lastFeedToken = null;
+        this.boardGeo = null;
         
         this.setupNetworkListeners();
     }
@@ -266,40 +271,110 @@ class CribbageGame {
 
         // Update peg display
         this.renderPegDisplay(state);
+
+        // Update play dashboard
+        this.renderPlayDashboard(state);
+    }
+
+    buildBoardGeo() {
+        const p = 13; // hole pitch
+        const holes = [];
+        const cur = { x: 20, y: 100 };
+        const pushRun = (dx, dy, n) => {
+            for (let i = 0; i < n; i++) {
+                holes.push({ x: Math.round(cur.x * 10) / 10, y: Math.round(cur.y * 10) / 10 });
+                cur.x += dx;
+                cur.y += dy;
+            }
+        };
+        pushRun(p, 0, 22);      //  1-22   "2" top bar
+        pushRun(0, p, 5);       // 23-27   "2" right side
+        pushRun(-p / Math.sqrt(2), p / Math.sqrt(2), 10); // 28-37  "2" diagonal
+        pushRun(p, 0, 22);      // 38-59   "2" bottom bar
+        pushRun(p, 0, 4);       // 60-63   connector into the "9"
+        pushRun(0, -p, 10);     // 64-73   "9" left side (up)
+        pushRun(p, 0, 22);      // 74-95   "9" top bar
+        pushRun(0, p, 10);      // 96-105  "9" right side (down)
+        pushRun(0, p, 15);      // 106-120 "9" tail
+        const game = { x: Math.round(cur.x * 10) / 10, y: Math.round(cur.y * 10) / 10 };
+        return { holes, game, p, r: 6.4 };
+    }
+
+    pegPosition(score, geo) {
+        const pos = Math.max(1, Math.min(score, 121));
+        if (pos === 121) return geo.game;
+        return geo.holes[pos - 1];
     }
 
     renderCribBoard(state) {
         const track = document.getElementById('board-track');
-        track.innerHTML = '';
-        
-        // Create 121 holes (standard cribbage board)
-        for (let i = 1; i <= 121; i++) {
-            const hole = document.createElement('div');
-            hole.className = 'board-hole';
-            hole.dataset.position = i;
-            
-            // Check for pegs
-            state.players.forEach((player, idx) => {
-                if (player.pegs[0] === i) {
-                    hole.classList.add('peg-front');
-                    hole.dataset.pegFront = idx;
-                }
-                if (player.pegs[1] === i) {
-                    hole.classList.add('peg-back');
-                    hole.dataset.pegBack = idx;
-                }
-            });
-            
-            track.appendChild(hole);
-        }
+        if (!track) return;
+        const geo = this.boardGeo || (this.boardGeo = this.buildBoardGeo());
+        const PEG_STYLES = [
+            { fill: '#d4a843', edge: '#8a6a1f' },
+            { fill: '#2e5c8a', edge: '#16334f' },
+            { fill: '#a83232', edge: '#5e1616' }
+        ];
 
-        // Scroll to current leader
-        const maxScore = Math.max(...state.scores);
-        const leaderPos = maxScore % 121 || 121;
-        const holeEl = track.querySelector(`[data-position="${leaderPos}"]`);
-        if (holeEl) {
-            holeEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        let svg = '';
+        svg += '<defs>' +
+            '<linearGradient id="woodGrad" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0" stop-color="#DCBC8F"/><stop offset="1" stop-color="#BE9A6B"/>' +
+            '</linearGradient>' +
+            '<linearGradient id="brassGrad" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0" stop-color="#F5DB8B"/><stop offset="1" stop-color="#C9A33E"/>' +
+            '</linearGradient>' +
+            '</defs>';
+
+        // Board base (wood plank)
+        svg += '<rect x="4" y="4" width="852" height="512" rx="20" fill="url(#woodGrad)" stroke="#3E2C16" stroke-width="3"/>';
+        for (let y = 90; y < 512; y += 60) {
+            svg += `<line x1="20" y1="${y}" x2="840" y2="${y}" stroke="#AE8858" stroke-width="1" opacity="0.5"/>`;
         }
+        svg += `<line x1="20" y1="96" x2="840" y2="96" stroke="#8A6A3F" stroke-width="2" opacity="0.6"/>`;
+
+        // Brass 29 plate
+        svg += `<rect x="336" y="28" width="188" height="52" rx="8" fill="url(#brassGrad)" stroke="#8A6A1F" stroke-width="2"/>
+            <text x="430" y="50" text-anchor="middle" class="board-emblem">29</text>
+            <text x="430" y="72" text-anchor="middle" class="board-caption">CRIBBAGE</text>`;
+
+        // Holes 1-120 shaped as the numeral 29
+        for (let i = 0; i < geo.holes.length; i++) {
+            const pos = i + 1;
+            let cls = 'board-hole';
+            if (pos % 5 === 0) cls += ' hole-5';
+            if (pos % 10 === 0) cls += ' hole-10';
+            if (pos === 90) cls += ' hole-skunk';
+            svg += `<circle cx="${geo.holes[i].x}" cy="${geo.holes[i].y}" r="${geo.r}" class="${cls}" data-hole="${pos}"/>`;
+        }
+        // Game hole 121
+        svg += `<circle cx="${geo.game.x}" cy="${geo.game.y}" r="${geo.r + 1.6}" class="board-hole game-hole" data-hole="121"/>`;
+
+        // Markers + numbers
+        for (let i = 9; i < geo.holes.length; i += 10) {
+            const h = geo.holes[i];
+            svg += `<text x="${h.x}" y="${h.y + 15}" text-anchor="middle" class="board-label">${i + 1}</text>`;
+        }
+        svg += `<text x="40" y="84" text-anchor="start" class="board-start">START</text>`;
+        svg += `<text x="${geo.game.x}" y="${geo.game.y + 30}" text-anchor="middle" class="board-win">121 WIN</text>`;
+        const skunkHole = geo.holes[89];
+        svg += `<text x="${skunkHole.x}" y="${skunkHole.y - 12}" text-anchor="middle" class="board-skunk">SKUNK</text>`;
+
+        // Pegs (back = start-of-round position, front = current score)
+        state.players.forEach((player, idx) => {
+            const style = PEG_STYLES[idx % PEG_STYLES.length];
+            const startScore = (state.roundStart && state.roundStart[idx] != null)
+                ? state.roundStart[idx] : player.score;
+            const backPos = this.pegPosition(startScore, geo);
+            const frontPos = this.pegPosition(player.score, geo);
+
+            if (backPos.x !== frontPos.x || backPos.y !== frontPos.y) {
+                svg += `<g class="peg peg-back"><rect x="${backPos.x - 2.4}" y="${backPos.y - 10}" width="4.8" height="10" rx="1.5" fill="${style.fill}" stroke="${style.edge}" stroke-width="1" opacity="0.75"/><circle cx="${backPos.x}" cy="${backPos.y}" r="5" fill="${style.fill}" stroke="${style.edge}" stroke-width="1" opacity="0.75"/></g>`;
+            }
+            svg += `<g class="peg peg-front"><rect x="${frontPos.x - 3}" y="${frontPos.y - 13}" width="6" height="13" rx="2" fill="${style.fill}" stroke="${style.edge}" stroke-width="1.2"/><circle cx="${frontPos.x}" cy="${frontPos.y}" r="6.6" fill="${style.fill}" stroke="${style.edge}" stroke-width="1.2"/></g>`;
+        });
+
+        track.innerHTML = svg;
 
         // Player score entries
         const scoreContainer = document.getElementById('player-scores');
@@ -585,6 +660,95 @@ class CribbageGame {
         }
     }
 
+    recordScoreEvent(state, playerIndex, points, reason) {
+        if (!points || points <= 0) return;
+        const name = state.players[playerIndex]?.name || 'PLAYER';
+        this.lastScoreEvent = {
+            playerIndex,
+            name,
+            points,
+            reason: reason || `${points} pt${points > 1 ? 's' : ''}`,
+            ts: Date.now()
+        };
+        this.scoreFeed.push(this.lastScoreEvent);
+        if (this.scoreFeed.length > 40) this.scoreFeed.shift();
+    }
+
+    renderPlayDashboard(state) {
+        const dash = document.getElementById('play-dashboard');
+        if (!dash) return;
+        const active = ['PLAY', 'COUNT_HAND', 'COUNT_CRIB', 'GAME_OVER'].includes(state.phase);
+        dash.hidden = !active;
+        if (!active) return;
+
+        const token = (state.roundStart || []).join('|');
+        if (this.lastFeedToken !== token) {
+            this.lastFeedToken = token;
+            this.scoreFeed = [];
+            this.lastScoreEvent = null;
+        }
+
+        // Running count + turn
+        document.getElementById('pd-count-val').textContent = state.playCount || 0;
+        document.getElementById('pd-count-total').textContent = '/31';
+        const turnEl = document.getElementById('pd-turn');
+        turnEl.textContent = state.players[state.currentPlayer]?.name || '—';
+        turnEl.className = 'pd-turn-num ' + (state.currentPlayer === this.localPlayerIndex ? 'you' : 'them');
+
+        // Play pile
+        const pileEl = document.getElementById('pd-pile-cards');
+        if (state.playPile && state.playPile.length) {
+            pileEl.innerHTML = state.playPile.map(p => {
+                const card = Card.fromString(p.card);
+                const mine = p.player === this.localPlayerIndex;
+                return `<div class="pd-card ${card.color} ${mine ? 'mine' : 'theirs'}">
+                    <span class="pd-card-rank">${card.rank}</span>
+                    <span class="pd-card-suit">${card.suit}</span>
+                </div>`;
+            }).join('');
+        } else {
+            pileEl.innerHTML = '<span class="pd-empty">— new count —</span>';
+        }
+
+        // Last score (flash on change)
+        const lastEl = document.getElementById('pd-last');
+        if (this.lastScoreEvent) {
+            const e = this.lastScoreEvent;
+            const key = e.playerIndex + '|' + e.points + '|' + (e.reason || '') + '|' + e.ts;
+            lastEl.innerHTML = `<span class="pd-pts">+${e.points}</span>
+                <span class="pd-desc">${this.escapeHtml(e.reason || '')}</span>
+                <span class="pd-who">${this.escapeHtml(e.name)}</span>`;
+            if (key !== this.lastFlashedKey) {
+                this.lastFlashedKey = key;
+                lastEl.classList.remove('pd-flash');
+                void lastEl.offsetWidth;
+                lastEl.classList.add('pd-flash');
+            }
+        } else {
+            lastEl.textContent = '—';
+        }
+
+        // Feed
+        const feedEl = document.getElementById('pd-feed');
+        const recent = this.scoreFeed.slice(-6).reverse();
+        feedEl.innerHTML = recent.map(e => `
+            <div class="pd-feed-item">
+                <span class="pd-feed-pts ${e.playerIndex === this.localPlayerIndex ? 'mine' : 'theirs'}">+${e.points}</span>
+                <span class="pd-feed-desc">${this.escapeHtml(e.reason || '')}</span>
+                <span class="pd-feed-who">${this.escapeHtml(e.name)}</span>
+            </div>
+        `).join('') || '<div class="pd-feed-none">no points yet this round</div>';
+
+        // Scores
+        const scoresEl = document.getElementById('pd-scores');
+        scoresEl.innerHTML = state.players.map((p, i) => `
+            <div class="pd-score ${i === state.currentPlayer ? 'current' : ''} ${i === this.localPlayerIndex ? 'mine' : 'theirs'}">
+                <span class="pd-score-name">${this.escapeHtml(p.name)}</span>
+                <span class="pd-score-num">${p.score}</span>
+            </div>
+        `).join('');
+    }
+
     async discardToCrib() {
         const cardIndices = Array.from(this.discardSelection).sort((a, b) => b - a);
         const result = this.engine.discardToCrib(this.localPlayerIndex, cardIndices);
@@ -624,12 +788,27 @@ class CribbageGame {
     async playCard(cardIndex) {
         const handArr = this.engine.hands[this.localPlayerIndex] || [];
         const playedCard = handArr[cardIndex] ? handArr[cardIndex].toString() : '';
+        const before = [...this.engine.scores];
         const result = this.engine.playCard(this.localPlayerIndex, cardIndex);
         
         if (result.success) {
             this.selectedCards.clear();
+
+            // Record score events BEFORE broadcasting so the dashboard
+            // shows this play's points on the very same render.
+            const state = this.engine.getState(this.localPlayerIndex);
+            const delta = this.engine.scores[this.localPlayerIndex] - before[this.localPlayerIndex];
+            if (delta > 0) {
+                let reason = result.scoreResult?.points > 0 ? result.scoreResult.reasons.join('; ') : '';
+                const extra = delta - (result.scoreResult?.points || 0);
+                if (extra > 0) {
+                    reason = (reason ? reason + '; ' : '') + (result.playCount === 31 ? '31 for 2' : 'GO');
+                }
+                this.recordScoreEvent(state, this.localPlayerIndex, delta, reason);
+            }
+
             this.broadcastState();
-            
+
             this.addLogEntry(`You played ${playedCard} (count: ${result.playCount})`, 'action');
             
             if (result.scoreResult?.points > 0) {
@@ -645,9 +824,14 @@ class CribbageGame {
     }
 
     async sayGo() {
+        const before = [...this.engine.scores];
         const result = this.engine.sayGo(this.localPlayerIndex);
         
         if (result.success) {
+            this.engine.scores.forEach((s, i) => {
+                const d = s - before[i];
+                if (d > 0) this.recordScoreEvent(this.engine.getState(this.localPlayerIndex), i, d, 'GO');
+            });
             this.broadcastState();
             this.addLogEntry('You said GO', 'action');
         } else {
@@ -658,19 +842,26 @@ class CribbageGame {
     async countHand() {
         if (this.engine.phase === 'COUNT_HAND' || this.engine.phase === 'COUNT_CRIB') {
             const r = this.engine.proceedToNextCount();
+            const state = this.engine.getState(this.localPlayerIndex);
             if (r.handResult) {
                 const who = this.engine.players[r.handPlayer].name;
                 const desc = r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : 'no points';
                 this.addLogEntry(`${who} counted hand: ${desc} (${r.handResult.points} pts)`, 'score');
+                this.recordScoreEvent(state, r.handPlayer, r.handResult.points,
+                    r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : `${r.handResult.points} pts`);
             }
             if (r.dealerResult) {
                 const who = this.engine.players[r.dealerPlayer].name;
                 const desc = r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : 'no points';
                 this.addLogEntry(`${who} counted hand: ${desc} (${r.dealerResult.points} pts)`, 'score');
+                this.recordScoreEvent(state, r.dealerPlayer, r.dealerResult.points,
+                    r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : `${r.dealerResult.points} pts`);
             }
             if (r.cribResult) {
                 const desc = r.cribResult.breakdown.length ? r.cribResult.breakdown.join('; ') : 'no points';
                 this.addLogEntry(`Crib counted: ${desc} (${r.cribResult.points} pts)`, 'score');
+                this.recordScoreEvent(state, this.engine.dealerIndex, r.cribResult.points,
+                    r.cribResult.breakdown.length ? 'CRIB: ' + r.cribResult.breakdown.join('; ') : 'no crib points');
             }
         }
         
@@ -761,8 +952,13 @@ checkAITurn(state) {
 
     async aiPlay(ai, aiIndex, aiName, hand, state) {
         if (ai.shouldSayGo(hand, state.playCount)) {
+            const before = [...this.engine.scores];
             const result = this.engine.sayGo(aiIndex);
             if (result.success) {
+                this.engine.scores.forEach((s, i) => {
+                    const d = s - before[i];
+                    if (d > 0) this.recordScoreEvent(this.engine.getState(this.localPlayerIndex), i, d, 'GO');
+                });
                 this.addLogEntry(`${aiName} says GO`, 'action');
             }
             return;
@@ -778,6 +974,7 @@ checkAITurn(state) {
 
         // Capture before the engine splices the card out of the hand
         const playedCard = hand[cardIndex] ? hand[cardIndex].toString() : '';
+        const before = [...this.engine.scores];
         const result = this.engine.playCard(aiIndex, cardIndex);
         if (result.success) {
             this.addLogEntry(`${aiName} played ${playedCard} (count: ${result.playCount})`, 'action');
@@ -787,25 +984,44 @@ checkAITurn(state) {
             if (result.go) {
                 this.addLogEntry('GO!', 'score');
             }
+
+            // Record score events for the dashboard
+            const state = this.engine.getState(this.localPlayerIndex);
+            const delta = this.engine.scores[aiIndex] - before[aiIndex];
+            if (delta > 0) {
+                let reason = result.scoreResult?.points > 0 ? result.scoreResult.reasons.join('; ') : '';
+                const extra = delta - (result.scoreResult?.points || 0);
+                if (extra > 0) {
+                    reason = (reason ? reason + '; ' : '') + (result.playCount === 31 ? '31 for 2' : 'GO');
+                }
+                this.recordScoreEvent(state, aiIndex, delta, reason);
+            }
         }
     }
 
     async aiCount(ai, aiIndex, aiName, state) {
         if (state.phase === 'COUNT_HAND' || state.phase === 'COUNT_CRIB') {
             const r = this.engine.proceedToNextCount();
+            const fresh = this.engine.getState(this.localPlayerIndex);
             if (r.handResult) {
                 const who = this.engine.players[r.handPlayer].name;
                 const desc = r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : 'no points';
                 this.addLogEntry(`${who} counted hand: ${desc} (${r.handResult.points} pts)`, 'score');
+                this.recordScoreEvent(fresh, r.handPlayer, r.handResult.points,
+                    r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : `${r.handResult.points} pts`);
             }
             if (r.dealerResult) {
                 const who = this.engine.players[r.dealerPlayer].name;
                 const desc = r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : 'no points';
                 this.addLogEntry(`${who} counted hand: ${desc} (${r.dealerResult.points} pts)`, 'score');
+                this.recordScoreEvent(fresh, r.dealerPlayer, r.dealerResult.points,
+                    r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : `${r.dealerResult.points} pts`);
             }
             if (r.cribResult) {
                 const desc = r.cribResult.breakdown.length ? r.cribResult.breakdown.join('; ') : 'no points';
                 this.addLogEntry(`Crib counted: ${desc} (${r.cribResult.points} pts)`, 'score');
+                this.recordScoreEvent(fresh, this.engine.dealerIndex, r.cribResult.points,
+                    r.cribResult.breakdown.length ? 'CRIB: ' + r.cribResult.breakdown.join('; ') : 'no crib points');
             }
         }
 
