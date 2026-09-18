@@ -16,6 +16,20 @@ function setupEventListeners() {
         });
     });
 
+    // Play vs AI button
+    document.getElementById('play-ai-btn')?.addEventListener('click', () => {
+        const name = document.getElementById('player-name').value.trim().toUpperCase();
+        if (!name) {
+            game.showModal('ERROR', 'Enter your name first!', [{ text: 'OK', action: () => game.hideModal() }]);
+            return;
+        }
+        game.savePlayerName(name);
+        
+        // Default to 1v1 for AI play, but use selected mode if available
+        const mode = document.querySelector('.mode-card.selected')?.dataset.mode || '1v1';
+        game.createTable(mode);
+    });
+
     // Create table button (on landing)
     document.addEventListener('click', (e) => {
         if (e.target.id === 'create-table-btn') {

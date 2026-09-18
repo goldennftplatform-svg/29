@@ -8,6 +8,9 @@ class CribbageGame {
         this.animationsEnabled = true;
         this.soundEnabled = true;
         this.gameLog = [];
+        this.aiPlayers = new Map(); // playerIndex -> CribbageAI
+        this.aiThinking = false;
+        this.isSinglePlayer = false;
         
         this.setupNetworkListeners();
     }
@@ -123,9 +126,63 @@ class CribbageGame {
         }
 
         this.savePlayerName(name);
-        const result = this.network.createTable(mode, name);
-        this.joinGame(result.tableId);
+        
+        // Check if we should add AI opponents (single player mode)
+        const addAI = mode === '1v1' || mode === '3player';
+        
+        this.isSinglePlayer = addAI;
+        if (addAI) {
+            // Create local game with AI
+            this.setupLocalGame(mode, name);
+        } else {
+            const result = this.network.createTable(mode, name);
+            this.joinGame(result.tableId);
+        }
         this.hideModal();
+    }
+
+    setupLocalGame(mode, playerName) {
+        const playerCount = mode === '1v1' ? 2 : 3;
+        this.engine = new CribbageEngine(playerCount);
+        
+        // Add human player
+        this.engine.addPlayer(playerName, 'human_' + Date.now());
+        
+        // Add AI players
+        const difficulties = ['medium', 'hard'];
+        for (let i = 1; i < playerCount; i++) {
+            const aiName = this.getAIName(i);
+            const aiId = 'ai_' + i + '_' + Date.now();
+            this.engine.addPlayer(aiName, aiId);
+            this.aiPlayers.set(i, new CribbageAI(difficulties[(i-1) % difficulties.length]));
+        }
+        
+        this.localPlayerIndex = 0;
+        this.engine.setLocalPlayerIndex(0);
+        this.engine.startGame();
+        
+        this.joinLocalGame();
+    }
+
+    getAIName(index) {
+        const names = ['🦁 SIMBA', '🦓 ZARA', '🦏 KIFARU', '🐘 TEMBO', '🦒 TWIGA', '🐆 CHUI'];
+        return names[(index - 1) % names.length];
+    }
+
+    joinLocalGame() {
+        document.getElementById('landing-screen').classList.remove('active');
+        document.getElementById('game-screen').classList.add('active');
+        
+        document.getElementById('table-id-display').textContent = 'LOCAL SAFARI';
+        document.getElementById('mode-badge').textContent = this.engine.playerCount === 2 ? '1v1' : '3P';
+        document.getElementById('status-dot').classList.add('connected');
+        document.getElementById('status-text').textContent = 'LOCAL GAME';
+        
+        const state = this.engine.getState(this.localPlayerIndex);
+        this.renderGameState(state);
+        
+        this.addLogEntry('Welcome to the Savannah! 🦁', 'system');
+        this.checkAITurn(state);
     }
 
     joinTable(tableId) {
@@ -543,7 +600,114 @@ class CribbageGame {
 
     broadcastState() {
         const state = this.engine.getState(this.localPlayerIndex);
-        this.network.broadcastState(state);
+        if (this.isSinglePlayer) {
+            this.handleStateUpdate(state);
+            this.checkAITurn(state);
+        } else {
+            this.network.broadcastState(state);
+        }
+    }
+
+    checkAITurn(state) {
+        if (!this.isSinglePlayer) return;
+        if (this.aiThinking) return;
+        if (state.phase === 'GAME_OVER') return;
+
+        const currentPlayer = state.currentPlayer;
+        if (this.aiPlayers.has(currentPlayer)) {
+            this.aiThinking = true;
+            const delay = 800 + Math.random() * 1200; // 800-2000ms thinking time
+            setTimeout(() => this.makeAIMove(currentPlayer, state), delay);
+        }
+    }
+
+    async makeAIMove(aiIndex, state) {
+        const ai = this.aiPlayers.get(aiIndex);
+        if (!ai) {
+            this.aiThinking = false;
+            return;
+        }
+
+        const aiName = state.players[aiIndex]?.name || 'AI';
+        const hand = this.engine.hands[aiIndex] || [];
+
+        try {
+            if (state.phase === 'DISCARD') {
+                await this.aiDiscard(ai, aiIndex, aiName, hand, state);
+            } else if (state.phase === 'PLAY') {
+                await this.aiPlay(ai, aiIndex, aiName, hand, state);
+            } else if (state.phase === 'COUNT_HAND' || state.phase === 'COUNT_CRIB') {
+                await this.aiCount(ai, aiIndex, aiName, state);
+            }
+        } catch (e) {
+            console.error('AI error:', e);
+        }
+
+        this.aiThinking = false;
+        const newState = this.engine.getState(this.localPlayerIndex);
+        this.renderGameState(newState);
+        this.checkAITurn(newState);
+    }
+
+    async aiDiscard(ai, aiIndex, aiName, hand, state) {
+        const isDealer = aiIndex === this.engine.dealerIndex;
+        const discardCount = state.discardCount;
+        const discardIndices = ai.chooseDiscard(hand, isDealer, this.engine.starter, this.engine.playerCount);
+        
+        const result = this.engine.discardToCrib(aiIndex, discardIndices.sort((a, b) => b - a));
+        
+        if (result.success) {
+            const discardedCards = discardIndices.map(i => hand[i].toString()).join(', ');
+            this.addLogEntry(`${aiName} discarded ${discardCount} card(s) to the crib`, 'action');
+        }
+    }
+
+    async aiPlay(ai, aiIndex, aiName, hand, state) {
+        if (ai.shouldSayGo(hand, state.playCount)) {
+            const result = this.engine.sayGo(aiIndex);
+            if (result.success) {
+                this.addLogEntry(`${aiName} says GO`, 'action');
+            }
+            return;
+        }
+
+        const cardIndex = ai.choosePlayCard(hand, state.playCount, this.engine.playPile);
+        if (cardIndex === -1) {
+            // Should not happen if shouldSayGo returned false, but fallback
+            const result = this.engine.sayGo(aiIndex);
+            if (result.success) this.addLogEntry(`${aiName} says GO`, 'action');
+            return;
+        }
+
+        const result = this.engine.playCard(aiIndex, cardIndex);
+        if (result.success) {
+            const card = hand[cardIndex];
+            this.addLogEntry(`${aiName} played ${card} (count: ${result.playCount})`, 'action');
+            if (result.scoreResult?.points > 0) {
+                this.addLogEntry(`${aiName} scored ${result.scoreResult.points}: ${result.scoreResult.reasons.join(', ')}`, 'score');
+            }
+            if (result.go) {
+                this.addLogEntry('GO!', 'score');
+            }
+        }
+    }
+
+    async aiCount(ai, aiIndex, aiName, state) {
+        if (state.phase === 'COUNT_HAND') {
+            const result = this.engine.countHand(aiIndex);
+            this.addLogEntry(`${aiName} counted hand: ${result.breakdown.join('; ')} (${result.points} pts)`, 'score');
+        } else if (state.phase === 'COUNT_CRIB') {
+            const result = this.engine.countHand(this.engine.dealerIndex, true);
+            this.addLogEntry(`${aiName} counted crib: ${result.breakdown.join('; ')} (${result.points} pts)`, 'score');
+        }
+
+        // Auto-proceed after counting
+        setTimeout(() => {
+            this.engine.proceedToNextCount();
+            const newState = this.engine.getState(this.localPlayerIndex);
+            this.renderGameState(newState);
+            this.checkAITurn(newState);
+        }, 1500);
     }
 
     addLogEntry(message, type = 'system') {
