@@ -381,6 +381,8 @@ class CribbageGame {
     }
 
     renderPlayerHand(state) {
+        console.log('renderPlayerHand:', { phase: state.phase, hand: state.hand, canDiscard: state.canDiscard, canPlay: state.canPlay, playCount: state.playCount, currentPlayer: state.currentPlayer, localPlayerIndex: this.localPlayerIndex });
+        
         const hand = state.hand || [];
         const container = document.getElementById('hand-cards');
         
@@ -411,6 +413,8 @@ class CribbageGame {
         const state = this.engine.getState(this.localPlayerIndex);
         const idx = parseInt(cardEl.dataset.index);
         const cardStr = cardEl.dataset.card;
+        
+        console.log('Card clicked:', { idx, cardStr, phase: state.phase, canDiscard: state.canDiscard, canPlay: state.canPlay, playCount: state.playCount, localPlayerIndex: this.localPlayerIndex, currentPlayer: state.currentPlayer });
 
         if (state.phase === 'DISCARD' && state.canDiscard) {
             // Toggle discard selection
@@ -611,20 +615,23 @@ class CribbageGame {
         }
     }
 
-    checkAITurn(state) {
+checkAITurn(state) {
         if (!this.isSinglePlayer) return;
         if (this.aiThinking) return;
         if (state.phase === 'GAME_OVER') return;
 
         const currentPlayer = state.currentPlayer;
+        console.log('checkAITurn:', { currentPlayer, aiPlayers: Array.from(this.aiPlayers.keys()), phase: state.phase });
+        
         if (this.aiPlayers.has(currentPlayer)) {
             this.aiThinking = true;
-            const delay = 800 + Math.random() * 1200; // 800-2000ms thinking time
+            const delay = 800 + Math.random() * 1200;
             setTimeout(() => this.makeAIMove(currentPlayer, state), delay);
         }
     }
 
     async makeAIMove(aiIndex, state) {
+        console.log('makeAIMove:', { aiIndex, phase: state.phase });
         const ai = this.aiPlayers.get(aiIndex);
         if (!ai) {
             this.aiThinking = false;
