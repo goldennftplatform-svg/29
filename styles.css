@@ -1,7 +1,17 @@
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+button, .card, .mode-card, input, .table-card {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
 @font-face {
@@ -47,6 +57,7 @@ body {
     margin: 0 auto;
     padding: 16px;
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
 }
@@ -1489,4 +1500,119 @@ header.pixel-header::after {
         width: 44px;
         height: 62px;
     }
+}
+
+/* ============ Mobile & Touch polish ============ */
+
+@media (hover: none) {
+    .card:hover:not(.disabled):not(.selected) {
+        transform: none;
+        box-shadow: var(--pixel-shadow-sm);
+    }
+    .pixel-btn:hover:not(:disabled) {
+        transform: none;
+        box-shadow: var(--pixel-shadow);
+        background: var(--safari-green);
+    }
+}
+
+@media (max-width: 700px) {
+    #game-container { padding: 6px; }
+    :root {
+        --pixel-shadow: 3px 3px 0 var(--safari-black);
+        --pixel-shadow-sm: 2px 2px 0 var(--safari-black);
+    }
+    .game-header { padding: 8px 10px; }
+    .mode-selector { padding: 16px 10px; }
+    .table-list { padding: 0 10px 16px; }
+    .player-setup { padding: 10px; }
+    .logo h1 { font-size: 16px; letter-spacing: 1px; }
+
+    .crib-board { padding: 8px; }
+    .board-wrap { margin-bottom: 4px; }
+    .board-info { font-size: 7px; }
+    .player-score-entry .score { font-size: 10px; }
+
+    .game-area { padding: 8px; gap: 8px; }
+    .opponents-area { min-height: 84px; gap: 8px; }
+    .opponent-panel { padding: 6px; gap: 4px; }
+    .opponent-name { font-size: 8px; }
+    .opponent-cards { gap: 3px; min-height: 40px; }
+    .opponent-card-back { width: 28px; height: 41px; font-size: 14px; }
+    .opponent-panel.dealer::before { width: 22px; height: 22px; font-size: 14px; top: -9px; right: -9px; }
+
+    .center-area { padding: 10px; gap: 10px; }
+    .crib-zone, .starter-zone { padding: 8px 12px; min-width: 126px; }
+    .crib-cards { gap: 3px; min-height: 44px; }
+    .crib-card { width: 30px; height: 44px; font-size: 15px; }
+    .starter-card { width: 44px; height: 62px; }
+    .starter-rank { font-size: 15px; }
+    .starter-suit { font-size: 20px; }
+    .dealer-chip { padding: 6px 14px; }
+    .chip-label { font-size: 8px; }
+    .dealer-name { font-size: 8px; }
+
+    /* Dashboard: tight 2-col grid, pile & last-score full width */
+    .play-dashboard {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        padding: 8px 10px;
+    }
+    .pd-pile-block { grid-column: 1 / -1; order: -1; }
+    .pd-last-block { grid-column: 1 / -1; min-width: 0; max-width: none; }
+    .pd-count-block { min-width: 0; }
+    .pd-count-num b { font-size: 18px; }
+    .pd-title { font-size: 6px; }
+    .pd-card { width: 32px; height: 44px; font-size: 7px; }
+    .pd-card .pd-card-suit { font-size: 11px; }
+    .pd-pile-cards { gap: 4px; min-height: 38px; }
+    .pd-scores-block { min-width: 0; }
+    .pd-score { font-size: 8px; gap: 8px; padding: 3px 6px; }
+    .pd-score .pd-score-num { font-size: 10px; }
+    .pd-last { padding: 4px 8px; }
+    .pd-last .pd-pts { font-size: 12px; }
+    .pd-last .pd-desc { font-size: 11px; }
+    .pd-last .pd-who { font-size: 10px; }
+    .pd-feed { max-height: 44px; }
+    .pd-feed-item { font-size: 11px; }
+
+    .player-area { padding: 10px 8px; gap: 8px; }
+    .hand-label { font-size: 8px; }
+    .hand-cards { gap: 3px; min-height: 62px; }
+    .card { width: 42px; height: 60px; }
+    .card-rank { font-size: 12px; }
+    .card-suit { font-size: 18px; }
+    .turn-status { font-size: 8px; min-height: 20px; line-height: 1.5; }
+    .hand-actions { gap: 6px; }
+    .action-btn { font-size: 7px !important; padding: 9px 12px !important; }
+    .peg-display { font-size: 8px; gap: 6px; }
+
+    .phase-label { font-size: 11px; }
+    .phase-sub { font-size: 8px; }
+
+    .game-log { max-height: 110px; padding: 8px; }
+    .log-header { font-size: 9px; }
+    .log-entry { font-size: 12px; padding: 3px 6px; }
+
+    .modal { max-height: 85vh; }
+    .modal-header { font-size: 10px; padding: 10px 12px; }
+    .modal-content { padding: 14px; }
+}
+
+@media (max-width: 400px) {
+    .card { width: 38px; height: 54px; }
+    .card-rank { font-size: 10px; }
+    .card-suit { font-size: 16px; }
+    .hand-cards { gap: 2px; }
+    .card.selected, .card.discard-selected { transform: translateY(-8px); }
+    .turn-status { font-size: 7px; }
+    .board-emblem { font-size: 14px; }
+    .opponent-card-back { width: 24px; height: 36px; }
+}
+
+/* Short-landscape phones: let the page scroll, shrink chrome */
+@media (max-height: 480px) and (orientation: landscape) {
+    #game-container { min-height: auto; padding: 4px; }
+    .crib-board { padding: 4px; }
+    .modal { max-height: 92vh; }
 }
