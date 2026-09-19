@@ -498,9 +498,13 @@ class CribbageGame {
         }
         document.getElementById('crib-count').textContent = state.cribCount || 0;
 
-        // Starter
+        // Starter — stays face-down while the crib is still being picked. The
+        // engine cuts the starter at deal, but rules-wise it is only revealed
+        // AFTER everyone discards to the cribestr (turn-up phase and beyond).
+        // Re-show the face each render is fine; the gating below decides when.
+        const starterRevealedPhases = ['STARTER', 'PLAY', 'COUNT_HAND', 'COUNT_CRIB', 'GAME_OVER'];
         const starterEl = document.getElementById('starter-card');
-        if (state.starter) {
+        if (state.starter && starterRevealedPhases.includes(state.phase)) {
             const card = Card.fromString(state.starter);
             starterEl.className = `starter-card ${card.color}`;
             starterEl.innerHTML = `
@@ -508,6 +512,7 @@ class CribbageGame {
                 <span class="starter-suit">${card.suit}</span>
             `;
         } else {
+            // Face-down until the crib is picked (DISCARD / DEALING / WAITING).
             starterEl.className = 'starter-card empty';
             starterEl.textContent = '?';
         }
