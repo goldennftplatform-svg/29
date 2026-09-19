@@ -16,6 +16,9 @@ class CribbageGame {
         this.lastFlashedKey = '';
         this.lastFeedToken = null;
         this.boardGeo = null;
+        this.lastPegBefore = {};      // playerIndex -> score BEFORE its most recent scoring event
+        this.lastRenderedPegs = {};   // playerIndex -> score at last board render (for pop anims)
+        this.lastBoardRoundToken = null;
         
         this.setupNetworkListeners();
     }
@@ -360,19 +363,83 @@ class CribbageGame {
         const skunkHole = geo.holes[89];
         svg += `<text x="${skunkHole.x}" y="${skunkHole.y - 12}" text-anchor="middle" class="board-skunk">SKUNK</text>`;
 
-        // Pegs (back = start-of-round position, front = current score)
+        // Peg audit trail. True cribbage semantics: the back (hollow) peg
+        // always marks where the front peg JUST sat, so the gap between the
+        // two is exactly the points the current scoring run just earned.
+        // Back pegs reset to "stacked" (hidden) at every new round.
+        const roundToken = (state.roundStart || []).join('|');
+        if (this.lastBoardRoundToken !== roundToken) {
+            this.lastBoardRoundToken = roundToken;
+            this.lastPegBefore = {};
+            this.lastRenderedPegs = {};
+        }
+        const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        const prevPegs = this.lastRenderedPegs || {};
+
+        // Trail ribbons: the exact holes a peg travelled (back -> front),
+        // stroked in the player's colour. Fresh trails draw themselves on.
         state.players.forEach((player, idx) => {
             const style = PEG_STYLES[idx % PEG_STYLES.length];
-            const startScore = (state.roundStart && state.roundStart[idx] != null)
-                ? state.roundStart[idx] : player.score;
-            const backPos = this.pegPosition(startScore, geo);
-            const frontPos = this.pegPosition(player.score, geo);
+            const backScore = this.lastPegBefore[idx];
+            if (backScore == null) return;
+            const back = this.pegPosition(backScore, geo);
+            const front = this.pegPosition(player.score, geo);
+            if (back.x === front.x && back.y === front.y) return;
 
-            if (backPos.x !== frontPos.x || backPos.y !== frontPos.y) {
-                svg += `<g class="peg peg-back"><rect x="${backPos.x - 2.4}" y="${backPos.y - 10}" width="4.8" height="10" rx="1.5" fill="${style.fill}" stroke="${style.edge}" stroke-width="1" opacity="0.75"/><circle cx="${backPos.x}" cy="${backPos.y}" r="5" fill="${style.fill}" stroke="${style.edge}" stroke-width="1" opacity="0.75"/></g>`;
+            let d = `M ${back.x} ${back.y}`;
+            let len = 0;
+            const lo = Math.max(1, Math.min(backScore, 121));
+            const hi = Math.max(1, Math.min(player.score, 121));
+            for (let h = lo + 1; h <= hi; h++) {
+                const c = h <= 120 ? geo.holes[h - 1] : geo.game;
+                d += ` L ${c.x} ${c.y}`;
+                len += Math.hypot(c.x - back.x, c.y - back.y);
             }
-            svg += `<g class="peg peg-front"><rect x="${frontPos.x - 3}" y="${frontPos.y - 13}" width="6" height="13" rx="2" fill="${style.fill}" stroke="${style.edge}" stroke-width="1.2"/><circle cx="${frontPos.x}" cy="${frontPos.y}" r="6.6" fill="${style.fill}" stroke="${style.edge}" stroke-width="1.2"/></g>`;
+            len = Math.max(1, Math.round(len));
+            const fresh = !reduceMotion && prevPegs[idx] != null && prevPegs[idx] !== player.score;
+            const dash = fresh
+                ? `stroke-dasharray:${len} ${len};stroke-dashoffset:${len};animation:trailDraw .5s ease-out forwards`
+                : `stroke-dasharray:${len} ${len};stroke-dashoffset:0`;
+            const my = idx === this.localPlayerIndex ? 'my' : 'them';
+            svg += `<path class="peg-trail ${my}" d="${d}" style="${dash}" stroke="${style.fill}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.16"/>`;
+            svg += `<path class="peg-trail ${my} trail-core" d="${d}" style="${dash}" stroke="${style.fill}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>`;
         });
+
+        // Pegs: front (solid bead) = current score; back (hollow ring) = where
+        // the peg last sat. A "+N" chip is the audit readout of the distance.
+        state.players.forEach((player, idx) => {
+            const style = PEG_STYLES[idx % PEG_STYLES.length];
+            const backScore = this.lastPegBefore[idx];
+            const back = backScore != null ? this.pegPosition(backScore, geo) : null;
+            const front = this.pegPosition(player.score, geo);
+            const moved = !reduceMotion && prevPegs[idx] != null && prevPegs[idx] !== player.score;
+
+            if (back && (back.x !== front.x || back.y !== front.y)) {
+                svg += `<g class="peg peg-back k${idx}"><rect x="${back.x - 2.2}" y="${back.y - 11.5}" width="4.4" height="11.5" rx="1.6" fill="${style.fill}" opacity="0.55" stroke="${style.edge}" stroke-width="1"/><circle cx="${back.x}" cy="${back.y}" r="7.2" fill="none" stroke="${style.fill}" stroke-width="1.6" opacity="0.85"/></g>`;
+            }
+
+            svg += `<g class="peg peg-front k${idx}${moved ? ' peg-pop' : ''}">` +
+                `<circle cx="${front.x}" cy="${front.y}" r="10.5" fill="${style.fill}" opacity="0.22"/>` +
+                `<rect x="${front.x - 3.4}" y="${front.y - 15}" width="6.8" height="15" rx="2.2" fill="${style.fill}" stroke="${style.edge}" stroke-width="1.2"/>` +
+                `<circle cx="${front.x}" cy="${front.y}" r="7.2" fill="${style.fill}" stroke="${style.edge}" stroke-width="1.2"/>` +
+                `<circle cx="${front.x - 1.7}" cy="${front.y - 2}" r="2" fill="#FFF7E0" opacity="0.4"/>` +
+                `</g>`;
+
+            if (back && (back.x !== front.x || back.y !== front.y)) {
+                const gain = Math.max(1, Math.min(player.score, 121) - Math.min(backScore, 121));
+                svg += `<g class="peg-chip${moved ? ' chip-pop' : ''}"><rect x="${front.x + 14}" y="${front.y - 27}" width="34" height="16" rx="3.5"/><text x="${front.x + 31}" y="${front.y - 15.5}" text-anchor="middle">+${gain}</text></g>`;
+            }
+        });
+
+        // Breathing beacon on the hole your front peg just landed on
+        const local = state.players[this.localPlayerIndex];
+        if (local) {
+            const fp = this.pegPosition(local.score, geo);
+            svg += `<circle class="hole-pulse" cx="${fp.x}" cy="${fp.y}" r="9"/>`;
+        }
+
+        this.lastRenderedPegs = {};
+        state.players.forEach((p, i) => { this.lastRenderedPegs[i] = p.score; });
 
         track.innerHTML = svg;
 
@@ -404,7 +471,7 @@ class CribbageGame {
                         `).join('')}
                     </div>
                     <div class="opponent-score">SCORE: ${player.score}</div>
-                    <div class="opponent-pegs">📍 ${player.pegs[0]} / 📍 ${player.pegs[1]}</div>
+                    <div class="opponent-pegs">📍 ${player.score}</div>
                 </div>
             `;
         }).join('');
@@ -667,14 +734,18 @@ class CribbageGame {
     renderPegDisplay(state) {
         const player = state.players[this.localPlayerIndex];
         if (player) {
-            document.getElementById('peg-front').textContent = player.pegs[0];
-            document.getElementById('peg-back').textContent = player.pegs[1];
+            const backScore = (this.lastPegBefore && this.lastPegBefore[this.localPlayerIndex] != null)
+                ? this.lastPegBefore[this.localPlayerIndex] : player.score;
+            document.getElementById('peg-front').textContent = player.score;
+            document.getElementById('peg-back').textContent = backScore;
         }
     }
 
     recordScoreEvent(state, playerIndex, points, reason) {
         if (!points || points <= 0) return;
         const name = state.players[playerIndex]?.name || 'PLAYER';
+        // Back peg = where the front peg sat right before this event landed.
+        this.lastPegBefore[playerIndex] = Math.max(0, state.scores[playerIndex] - points);
         this.lastScoreEvent = {
             playerIndex,
             name,
