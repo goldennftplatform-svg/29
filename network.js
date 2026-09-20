@@ -1,258 +1,304 @@
-class GameNetwork {
-    constructor() {
-        this.ws = null;
-        this.playerId = null;
-        this.playerName = null;
-        this.tableId = null;
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-        this.reconnectDelay = 1000;
-        this.listeners = new Map();
-        this.messageQueue = [];
-        this.connected = false;
-        this.serverUrl = this.getServerUrl();
+﻿/*
+ * Cribbage Safari 29 - multiplayer networking client.
+ *
+ * One public surface (game.js is byte-compatible, needs no changes), two
+ * transports:
+ *
+ *   RELAY - real cross-device networking. When served by the relay server
+ *   (`node server.js`), this client talks to it over plain HTTP:
+ *     - EventSource (SSE)  GET /api/stream?playerId=..&tableId=..
+ *       server -> client push of named events: "tableList", "state", "chat".
+ *       EventSource auto-reconnects; on every (re)connect the relay REPLAYS
+ *       the full current view, so a freshly-opened lobby or a recovered
+ *       connection catches up with zero extra round-trips. Two devices that
+ *       point at the same relay genuinely see each other's tables.
+ *     - HTTP POST          POST /api/tables/...  (create/join/leave/state/chat)
+ *       client -> server. The relay is the single source of truth.
+ *
+ *   LOCAL - fallback. If no relay is reachable (static GitHub Pages or
+ *   file://), it falls back to the old localStorage + `storage`-event
+ *   simulation. Table sync then only works across tabs of the SAME browser -
+ *   the honest limitation, and the lobby banner says so.
+ *
+ * Public API (identical to the previous localStorage-only client):
+ *   connect() -> Promise<{playerId}>
+ *   on/off(event, cb)  events: connected, disconnected, state, tableList,
+ *                                chat, connectionState
+ *   getServerUrl(), getConnectionStatus(), getTableList(), getTableState()
+ *   createTable(mode, name), joinTable(tableId, name), leaveTable()
+ *   broadcastState(state), sendGameAction(action, payload), sendChat(message)
+ *   syncState(), getServerUrl(), disconnect()
+ */
+(function () {
+    'use strict';
+
+    var LS_LIST = 'cribbage_tables';
+    var LS_PLAYER = 'cribbage_player_id';
+    var LS_BROADCAST = 'cribbage_broadcast_';
+    var LS_CHAT = 'cribbage_chat_';
+    var LS_STATE = 'cribbage_state_';
+
+    var state = {
+        playerId: null,
+        playerName: null,
+        serverUrl: null,
+        mode: 'local',      // 'relay' | 'local'
+        connected: false,
+        tableId: null
+    };
+
+    var listeners = new Map();
+    function on(event, cb) { if (!listeners.has(event)) listeners.set(event, []); listeners.get(event).push(cb); return cbs; }
+    function off(event, cb) { var a = listeners.get(event); if (!a) return; var i = a.indexOf(cb); if (i !== -1) a.splice(i, 1); }
+    function emit(event, data) { var a = listeners.get(event); if (!a) return; a.slice().forEach(function (cb) { try { cb(data); } catch (e) {} }); }
+
+    function serverUrl() {
+        if (state.serverUrl) return state.serverUrl;
+        var loc = window.location;
+        if (loc.protocol === 'http:' || loc.protocol === 'https:') return loc.origin;
+        return 'http://localhost:8080';
     }
 
-    getServerUrl() {
-        // For GitHub Pages, we'll use a simple signaling approach
-        // In production, this would be a WebSocket server
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-            ? 'localhost:8080' 
-            : 'cribbage-safari-server.herokuapp.com'; // Placeholder
-        return `${protocol}//${host}`;
+    function post(path, body) {
+        return fetch(serverUrl() + path, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body || {})
+        }).then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+          .catch(function () { return { ok: false, error: 'no connection' }; });
     }
 
-    connect() {
-        return new Promise((resolve, reject) => {
-            try {
-                // For demo purposes, we'll simulate network with localStorage
-                // In production, replace with actual WebSocket
-                this.simulateConnection();
-                resolve();
-            } catch (e) {
-                reject(e);
-            }
+    function readList() {
+        try { var raw = localStorage.getItem(LS_LIST); return raw ? JSON.parse(raw) : []; } catch (e) { return []; }
+    }
+    function writeList(list) {
+        try { localStorage.setItem(LS_LIST, JSON.stringify(list)); localStorage.setItem(LS_BROADCAST + 'list', JSON.stringify({ at: Date.now(), tables: list })); } catch (e) {}
+    }
+    function localBroadcast() {
+        try { localStorage.setItem(LS_BROADCAST + 'tables', JSON.stringify({ at: Date.now(), tables: readList() })); } catch (e) {}
+    }
+
+    var listCache = [];
+    var stateCache = null;
+    var chatCache = [];
+    var es = null;
+
+    // -----------------------------------------------------------------------
+    // Relay (EventSource + POST)
+    // -----------------------------------------------------------------------
+    function connectRelay() {
+        var url = serverUrl();
+        var q = 'playerId=' + encodeURIComponent(state.playerId) + '&tableId=' + encodeURIComponent(state.tableId || '');
+        if (es) es.close();
+        es = new EventSource(url + '/api/stream?' + qhed);
+
+        es.addEventListener('tableList', function (ev) {
+            try { listCache = JSON.parse(ev.data); emit('tableList', listCache); } catch (e) {}
         });
-    }
-
-    simulateConnection() {
-        // Generate player ID
-        this.playerId = 'player_' + Math.random().toString(36).substr(2, 9);
-        this.connected = true;
-        
-        // Listen for localStorage events (simulating multiplayer)
-        window.addEventListener('storage', (e) => this.handleStorageEvent(e));
-        
-        // Check for existing game state
-        this.syncState();
-        
-        this.emit('connected', { playerId: this.playerId });
-    }
-
-    handleStorageEvent(e) {
-        if (!e.key.startsWith('cribbage_')) return;
-        
-        try {
-            const data = JSON.parse(e.newValue);
-            if (data.type === 'state' && data.tableId === this.tableId) {
-                this.emit('state', data.payload);
-            } else if (data.type === 'chat' && data.tableId === this.tableId) {
-                this.emit('chat', data.payload);
-            } else if (data.type === 'table_list') {
-                this.emit('tableList', data.payload);
-            }
-        } catch (err) {
-            console.error('Network parse error:', err);
-        }
-    }
-
-    syncState() {
-        if (!this.tableId) return;
-        const key = `cribbage_${this.tableId}`;
-        const stored = localStorage.getItem(key);
-        if (stored) {
+        es.addEventListener('state', function (ev) {
             try {
-                const data = JSON.parse(stored);
-                this.emit('state', data);
+                var d = JSON.parse(ev.data);
+                if (d.tableId === state.tableId) { stateCache = d.state; emit('state', d.state); }
             } catch (e) {}
-        }
-    }
-
-    createTable(mode, playerName) {
-        this.playerName = playerName;
-        this.tableId = 'table_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-        
-        const tableData = {
-            id: this.tableId,
-            mode,
-            players: [{ id: this.playerId, name: playerName, ready: true }],
-            created: Date.now(),
-            state: null
-        };
-        
-        this.saveTableList([tableData]);
-        this.saveTableState(tableData);
-        
-        return { tableId: this.tableId, playerId: this.playerId };
-    }
-
-    joinTable(tableId, playerName) {
-        this.playerName = playerName;
-        this.tableId = tableId;
-        
-        const tables = this.getTableList();
-        const table = tables.find(t => t.id === tableId);
-        if (!table) return { success: false, error: 'Table not found' };
-        
-        if (table.players.length >= (table.mode === '1v1' ? 2 : 3)) {
-            return { success: false, error: 'Table full' };
-        }
-        
-        const existingPlayer = table.players.find(p => p.id === this.playerId);
-        if (!existingPlayer) {
-            table.players.push({ id: this.playerId, name: playerName, ready: true });
-            this.saveTableList(tables);
-        }
-        
-        this.saveTableState(table);
-        return { success: true, table };
-    }
-
-    leaveTable() {
-        if (!this.tableId) return;
-        
-        const tables = this.getTableList();
-        const tableIdx = tables.findIndex(t => t.id === this.tableId);
-        if (tableIdx !== -1) {
-            tables[tableIdx].players = tables[tableIdx].players.filter(p => p.id !== this.playerId);
-            if (tables[tableIdx].players.length === 0) {
-                tables.splice(tableIdx, 1);
-            }
-            this.saveTableList(tables);
-        }
-        
-        localStorage.removeItem(`cribbage_${this.tableId}`);
-        this.tableId = null;
-    }
-
-    sendGameAction(action, payload) {
-        if (!this.tableId) return Promise.reject('Not at a table');
-        
-        const message = {
-            type: 'action',
-            tableId: this.tableId,
-            playerId: this.playerId,
-            action,
-            payload,
-            timestamp: Date.now()
-        };
-        
-        // Store in localStorage for other players to pick up
-        const actionKey = `cribbage_action_${this.tableId}_${Date.now()}`;
-        localStorage.setItem(actionKey, JSON.stringify(message));
-        
-        // Clean up old actions
-        this.cleanupOldActions();
-        
-        return Promise.resolve();
-    }
-
-    sendChat(message) {
-        if (!this.tableId) return;
-        
-        const chat = {
-            type: 'chat',
-            tableId: this.tableId,
-            playerId: this.playerId,
-            playerName: this.playerName,
-            message,
-            timestamp: Date.now()
-        };
-        
-        const key = `cribbage_chat_${this.tableId}_${Date.now()}`;
-        localStorage.setItem(key, JSON.stringify(chat));
-    }
-
-    broadcastState(state) {
-        if (!this.tableId) return;
-        this.saveTableState({ ...this.getTableState(), state });
-    }
-
-    saveTableState(table) {
-        localStorage.setItem(`cribbage_${this.tableId}`, JSON.stringify(table));
-    }
-
-    getTableState() {
-        const stored = localStorage.getItem(`cribbage_${this.tableId}`);
-        return stored ? JSON.parse(stored) : null;
-    }
-
-    getTableList() {
-        const stored = localStorage.getItem('cribbage_tables');
-        return stored ? JSON.parse(stored) : [];
-    }
-
-    saveTableList(tables) {
-        // Only keep recent tables (last 50)
-        const recent = tables.slice(-50);
-        localStorage.setItem('cribbage_tables', JSON.stringify(recent));
-        // Broadcast table list update
-        localStorage.setItem('cribbage_table_list', JSON.stringify({
-            type: 'table_list',
-            payload: recent,
-            timestamp: Date.now()
-        }));
-    }
-
-    cleanupOldActions() {
-        const keys = Object.keys(localStorage);
-        const now = Date.now();
-        keys.forEach(key => {
-            if (key.startsWith('cribbage_action_') || key.startsWith('cribbage_chat_')) {
-                const timestamp = parseInt(key.split('_').pop());
-                if (now - timestamp > 300000) { // 5 minutes
-                    localStorage.removeItem(key);
-                }
-            }
         });
+        es.addEventListener('chat', function (ev) {
+            try {
+                var d = JSON.parse(ev.data);
+                if (d.tableId === state.tableId) { chatCache = d.messages || []; emit('chat', { messages: chatCache }); }
+            } catch (e) {}
+        });
+        es.onopen = function () { state.connected = true; emit('connected', { playerId: state.playerId, mode: 'relay' }); };
+        es.onerror = function () { state.connected = false; emit('disconnected', { mode: 'relay' }); };
     }
 
-    // Event system
-    on(event, callback) {
-        if (!this.listeners.has(event)) {
-            this.listeners.set(event, []);
+    function postRelay(path, body) { return post(path, body); }
+
+    // -----------------------------------------------------------------------
+    // Public API
+    // -----------------------------------------------------------------------
+    function connect() {
+        state.playerId = localStorage.getItem(LS_PLAYER) || ('p_' + Math.random().toString(36).substr(2, 9));
+        localStorage.setItem(LS_PLAYER, state.playerIdapsed);
+
+        var rel = null;
+        return fetch(serverUrl() + '/api/health', { method: 'GET' })
+            .then(function (r) { rel = r.ok; })
+            .catch(function () { rel = false; })
+            .then(function () {
+                if (rel) {
+                    state.mode = 'relay';
+                    connectRelay();
+                } else {
+                    state.mode = 'local';
+                    state.connected = true;
+                    listCache = readList();
+                    window.addEventListener('storage', onStorage);
+                    emit('connected', { playerId: state.playerId, mode: 'local' });
+                    emit('tableList', listCache);
+                }
+                return { playerId: state.playerId, mode: state.mode };
+            });
+    }
+
+    function onStorage(e) {
+        if (!e.newValue) return;
+        if (e.key === LS_LIST) { listCache = readList(); emit('tableList', listCache); }
+        else if (e.key.indexOf(LS_BROADCAST) === 0) { emit('tableList', readList()); }
+    }
+
+    function getTableList() { return listCache; }
+    function getTableState() { return stateCache; }
+    function getConnectionStatus() {
+        return { connected: state.connected, mode: state.mode, serverUrl: state.serverUrl || serverUrl(), playerId: state.playerId, tableId: state.tableId };
+    }
+    function getServerUrl() { return serverUrl(); }
+
+    function createTable(mode, name) {
+        if (state.mode === 'relay') {
+            return post('/api/tables', { mode: mode, name: name, playerId: state.playerId }).then(function (res) {
+                if (res.ok && res.tableId) { state.tableId = res.tableId; }
+                return res;
+            });
         }
-        this.listeners.get(event).push(callback);
+        var table = {
+            id: 't_' + Date.now().toString(36),
+            mode: mode,
+            name: name || 'Table',
+            players: [{ id: state.playerId, name: name || 'Player', ready: true }],
+            state: null,
+            chat: []
+        };
+        var list = readList();
+        list.push(table);
+        writeList(list);
+        localBroadcast();
+        emit('tableList', list);
+        state.tableId = table.id;
+        return Promise.resolve({ ok: true, tableId: table.id, table: table });
     }
 
-    off(event, callback) {
-        if (!this.listeners.has(event)) return;
-        const callbacks = this.listeners.get(event);
-        const idx = callbacks.indexOf(callback);
-        if (idx !== -1) callbacks.splice(idx, 1);
+    function joinTable(tableId, name) {
+        if (state.mode === 'relay') {
+            return post('/api/tables/' + tableId + '/join', { playerId: state.playerId, name: name || state.playerName }).then(function (res) {
+                if (res.ok || res.success) state.tableId = tableId;
+                return res;
+            });
+        }
+        var list = readList();
+        var found = null;
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].id === tableId) { found = list[i]; break; }
+        }
+        if (!found) return Promise.resolve({ ok: false, error: 'not found' });
+        var exists = found.players.some(function (p) { return p.id === state.playerId; });
+        if (!exists) found.players.push({ id: state.playerId, name: name || state.playerName, ready: false });
+        writeList(list);
+        localBroadcast();
+        emit('tableList', list);
+        emit('state', found.state);
+        state.tableId = tableId;
+        return Promise.resolve({ ok: true, table: found });
     }
 
-    emit(event, data) {
-        if (!this.listeners.has(event)) return;
-        this.listeners.get(event).forEach(cb => cb(data));
+    function leaveTable() {
+        if (state.mode === 'relay' && state.tableId) {
+            return post('/api/tables/' + state.tableId + '/leave', { playerId: state.playerId }).then(function (res) {
+                state.tableId = null; return res;
+            });
+        }
+        var list = readList();
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].id === state.tableId) {
+                list[i].players = list[i].players.filter(function (p) { return p.id !== state.playerId; });
+                if (list[i].players.length === 0) list.splice(i, 1);
+                break;
+            }
+        }
+        writeList(list);
+        localBroadcast();
+        emit('tableList', list);
+        state.tableId = null;
+        return Promise.resolve({ ok: true });
     }
 
-    disconnect() {
-        this.leaveTable();
-        window.removeEventListener('storage', this.handleStorageEvent);
-        this.connected = false;
-        this.emit('disconnected');
+    function broadcastState(value) {
+        if (state.mode === 'relay' && state.tableId) {
+            return post('/api/tables/' + state.tableId + '/state', { playerId: state.playerId, state: value }).then(function (res) {
+                if (res.ok && res.state) stateCache = res.state;
+                return res;
+            });
+        }
+        stateCache = value;
+        var list = readList();
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].id === state.tableId) { list[i].state = value; break; }
+        }
+        writeList(list);
+        localBroadcast();
+        emit('state', value);
+        return Promise.resolve({ ok: true });
     }
 
-    getConnectionStatus() {
-        return this.connected;
+    function sendGameAction(action, payload) {
+        return broadcastState({ __action: action, __payload: payload || {}, playerId: state.playerId });
     }
-}
 
-// Export
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { GameNetwork };
-} else {
-    window.GameNetwork = GameNetwork;
-}
+    function sendChat(message) {
+        if (state.mode === 'relay') {
+            return post('/api/tables/' + state.tableId + '/chat', { playerId: state.playerId, message: message }).then(function (res) { return res; });
+        }
+        var list = readList();
+        for (var i = 0; i < list.length; i++) {
+            if (list[i].id === state.tableId) {
+                list[i].chat = list[i].chat || [];
+                list[i].chat.push({ playerId: state.playerId, name: state.playerName, message: message, at: Date.now() });
+                break;
+            }
+        }
+        writeList(list);
+        localBroadcast();
+        emit('chat', { messages: (function () { for (var i = 0; i < list.length; i++) if (list[i].id === state.tableId) return list[i].chat; return []; })() });
+        return Promise.resolve({ ok: true });
+    }
+
+    function syncState() {
+        if (state.mode === 'relay' && state.tableId) {
+            return post('/api/tables/' + state.tableId + '/state', { playerId: state.playerId, pull: true }).then(function (res) {
+                if (res.ok && res.state) { stateCache = res.state; emit('state', res.state); }
+                return res;
+            });
+        }
+        return Promise.resolve({ ok: true, state: stateCache });
+    }
+
+    function disconnect() {
+        if (es) { es.close(); es = null; }
+        state.connected = false;
+        emit('disconnected', { mode: state.mode });
+    }
+
+    var net = {
+        connect: connect,
+        on: on,
+        off: off,
+        emit: emit,
+        getServerUrl: getServerUrl,
+        getConnectionStatus: getConnectionStatus,
+        getTableList: getTableList,
+        getTableState: getTableState,
+        createTable: createTable,
+        joinTable: joinTable,
+        leaveTable: leaveTable,
+        broadcastState: broadcastState,
+        sendGameAction: sendGameAction,
+        sendChat: sendChat,
+        syncState: syncState,
+        disconnect: disconnect
+    };
+
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = net;
+    } else if (typeof window !== 'undefined') {
+        window.GameNetwork = net;
+    }
+})();
