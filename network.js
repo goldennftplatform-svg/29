@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Cribbage Safari 29 - multiplayer networking client.
  *
  * One public surface (game.js is byte-compatible, needs no changes), two
@@ -90,7 +90,7 @@
         var url = serverUrl();
         var q = 'playerId=' + encodeURIComponent(state.playerId) + '&tableId=' + encodeURIComponent(state.tableId || '');
         if (es) es.close();
-        es = new EventSource(url + '/api/stream?' + qhed);
+        es = new EventSource(url + '/api/stream?' + q);
 
         es.addEventListener('tableList', function (ev) {
             try { listCache = JSON.parse(ev.data); emit('tableList', listCache); } catch (e) {}
@@ -118,7 +118,7 @@
     // -----------------------------------------------------------------------
     function connect() {
         state.playerId = localStorage.getItem(LS_PLAYER) || ('p_' + Math.random().toString(36).substr(2, 9));
-        localStorage.setItem(LS_PLAYER, state.playerIdapsed);
+        localStorage.setItem(LS_PLAYER, state.playerId);
 
         var rel = null;
         return fetch(serverUrl() + '/api/health', { method: 'GET' })
@@ -299,6 +299,7 @@
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = net;
     } else if (typeof window !== 'undefined') {
-        window.GameNetwork = net;
+        window.GameNetwork = net;   // legacy alias
+        window.network = net;       // browser global that game.js references
     }
 })();
