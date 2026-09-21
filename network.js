@@ -122,7 +122,7 @@
 
         var rel = null;
         return fetch(serverUrl() + '/api/health', { method: 'GET' })
-            .then(function (r) { rel = r.ok; })
+                .then(function (r) { rel = r.ok; })
             .catch(function () { rel = false; })
             .then(function () {
                 if (rel) {
