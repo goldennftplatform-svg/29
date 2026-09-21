@@ -3,8 +3,9 @@ let game = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     game = new CribbageGame();
-    await game.init();
+    window.game = game;
     setupEventListeners();
+    await game.init();
 });
 
 function setupEventListeners() {

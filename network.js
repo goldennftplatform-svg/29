@@ -29,7 +29,7 @@
  *   broadcastState(state), sendGameAction(action, payload), sendChat(message)
  *   syncState(), getServerUrl(), disconnect()
  */
-(function () {
+function GameNetwork() {
     'use strict';
 
     var LS_LIST = 'cribbage_tables';
@@ -48,7 +48,7 @@
     };
 
     var listeners = new Map();
-    function on(event, cb) { if (!listeners.has(event)) listeners.set(event, []); listeners.get(event).push(cb); return cbs; }
+    function on(event, cb) { if (!listeners.has(event)) listeners.set(event, []); listeners.get(event).push(cb); return cb; }
     function off(event, cb) { var a = listeners.get(event); if (!a) return; var i = a.indexOf(cb); if (i !== -1) a.splice(i, 1); }
     function emit(event, data) { var a = listeners.get(event); if (!a) return; a.slice().forEach(function (cb) { try { cb(data); } catch (e) {} }); }
 
@@ -120,9 +120,19 @@
         state.playerId = localStorage.getItem(LS_PLAYER) || ('p_' + Math.random().toString(36).substr(2, 9));
         localStorage.setItem(LS_PLAYER, state.playerId);
 
+        // Pages has no relay API. Do not delay browser play on an API probe.
+        if (window.location.hostname.endsWith('.github.io')) {
+            state.mode = 'local';
+            state.connected = true;
+            listCache = readList();
+            window.addEventListener('storage', onStorage);
+            emit('connected', { playerId: state.playerId, mode: 'local' });
+            emit('tableList', listCache);
+            return Promise.resolve({ playerId: state.playerId, mode: state.mode });
+        }
         var rel = null;
         return fetch(serverUrl() + '/api/health', { method: 'GET' })
-                .then(function (r) { rel = r.ok; })
+            .then(function (r) { rel = r.ok; })
             .catch(function () { rel = false; })
             .then(function () {
                 if (rel) {
@@ -296,10 +306,14 @@
         disconnect: disconnect
     };
 
-    if (typeof module !== 'undefined' && module.exports) {
-        module.exports = net;
-    } else if (typeof window !== 'undefined') {
-        window.GameNetwork = net;   // legacy alias
-        window.network = net;       // browser global that game.js references
-    }
-})();
+    ['playerId', 'playerName', 'tableId', 'connected'].forEach(function (key) {
+        Object.defineProperty(net, key, { get: function () { return state[key]; } });
+    });
+    return net;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { GameNetwork: GameNetwork };
+} else {
+    window.GameNetwork = GameNetwork;
+}
