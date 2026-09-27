@@ -1,18 +1,19 @@
 {
     "name": "litecrib",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "LITEcrib - 8-Bit Multiplayer Cribbage powered by Litecoin and LitVM",
     "main": "server.js",
     "scripts": {
         "start": "node server.js",
         "dev": "node server.js",
-"test":  "node tests/public-browser.cjs && node tests/wallet-e2e.cjs && node tests/wallet-psbt.cjs && node tests/sso-e2e.cjs"
+"test":  "node tests/public-browser.cjs && node tests/wallet-e2e.cjs && node tests/wallet-psbt.cjs && node tests/sso-e2e.cjs && node tests/credits-e2e.cjs"
     },
     "dependencies": {
         "bip32": "^4.0.0",
         "bip39": "^3.1.0",
         "bitcoinjs-lib": "^6.1.6",
         "ecpair": "^2.1.0",
+        "js-sha3": "^0.9.3",
         "tiny-secp256k1": "^2.2.4"
     },
     "engines": {

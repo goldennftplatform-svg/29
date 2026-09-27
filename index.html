@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-title" content="LITEcrib">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦁</text></svg>">
     <title>LITEcrib - Litecoin Cribbage</title>
-    <link rel="stylesheet" href="styles.css?v=20260924-gloss">
+    <link rel="stylesheet" href="styles.css?v=20260927-econ">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -80,6 +80,37 @@
                         <div class="wallet-bal" id="wallet-bal">0 LTC</div>
                         <p class="wallet-tip" id="wallet-tip"></p>
                         <button class="pixel-btn" id="wallet-refresh-btn">REFRESH</button>
+
+                        <div class="sso-box" id="sso-box">
+                            <div class="sso-login" id="sso-login">
+                                <div class="wallet-addr-label">LITEcrib ACCOUNT</div>
+                                <input class="sso-input" id="sso-email" type="email" placeholder="you@email.com" autocomplete="email">
+                                <input class="sso-input" id="sso-pass" type="password" placeholder="password" autocomplete="current-password">
+                                <div class="hand-actions">
+                                    <button class="pixel-btn secondary" id="sso-register">REGISTER</button>
+                                    <button class="pixel-btn" id="sso-login">LOGIN</button>
+                                </div>
+                                <p class="wallet-tip">One account = one custody wallet. Your seed is exportable later.</p>
+                            </div>
+                            <div class="sso-account" id="sso-account" hidden>
+                                <div class="wallet-addr-label">CREDIT DEPOSIT ADDRESS <span class="wallet-net">ACCOUNT</span></div>
+                                <div class="wallet-addr" id="sso-acct-addr">—</div>
+                                <div class="pts-row">
+                                    <span class="pts-chip" id="pts-bal">0 pts</span>
+                                    <span class="pts-usd" id="pts-usd">≈ $0.00</span>
+                                </div>
+                                <div class="wallet-addr-label">SETTLEMENT PROVIDER</div>
+                                <div class="provider-choice" id="provider-choice"></div>
+                                <div class="hand-actions">
+                                    <button class="pixel-btn secondary" id="pts-claim">CLAIM POINTS</button>
+                                    <button class="pixel-btn" id="pts-play">PLAY AI (20 PTS)</button>
+                                </div>
+                                <div class="wallet-addr-label">FEES I GENERATED</div>
+                                <div class="wallet-tip" id="pts-fees">—</div>
+                                <div class="wallet-tip gold" id="pts-last"></div>
+                                <button class="pixel-btn secondary sso-export" id="sso-export">EXPORT SEED</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -218,11 +249,11 @@
         </div>
     </div>
 
-    <script src="config.js?v=20260924-litecrib"></script>
+    <script src="config.js?v=20260927-econ"></script>
     <script src="game.js?v=20260920-startup"></script>
     <script src="network.js?v=20260920-startup"></script>
     <script src="cribbage-engine.js?v=20260920-startup"></script>
     <script src="main.js?v=20260920-startup"></script>
-    <script src="wallet.js?v=20260924-litecrib"></script>
+    <script src="wallet.js?v=20260927-econ"></script>
 </body>
 </html>

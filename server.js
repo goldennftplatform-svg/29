@@ -31,6 +31,10 @@ const config = require('./config');
 const LTC = require('./payments');
 const auth = require('./auth');
 const store = require('./store');
+const pricing = require('./pricing');
+const providers = require('./providers');
+
+const ADMIN = process.env.LITECRIB_ADMIN_TOKEN || '';
 
 store.load(); // accounts survive restarts (sessions do not)
 
@@ -197,6 +201,113 @@ function leaveTable(table, playerId) {
 function unsubscribeStream(s) {
     streams.delete(s);
     s.res.end();
+}
+
+// ---------------------------------------------------------------------------
+// SSO player economics: credits (points), provider preference, match escrow,
+// and the house fee (< 1% of game generation). All persisted via store.
+// ---------------------------------------------------------------------------
+function bearer(req) {
+    return (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+}
+
+function requireUser(req) {
+    return auth.getSessionUser(bearer(req));
+}
+
+function isAdmin(req) {
+    return !!ADMIN && bearer(req) === ADMIN;
+}
+
+function matchToJson(m) {
+    return {
+        id: m.id,
+        mode: m.mode,
+        entry: m.entry,
+        pot: m.pot,
+        state: m.state,
+        createdAt: m.createdAt,
+        settledAt: m.settledAt,
+        players: m.players.map((p) => ({ id: p.id, name: p.name, escrow: p.escrow })),
+        winner: m.winner,
+        fee: m.fee,
+        payout: m.payout
+    };
+}
+
+function escrowMatch(host, opponent, mode) {
+    const entry = pricing.minPvpEntryPoints;
+    const players = [{ id: host.id, name: host.email, escrow: entry }];
+    let pot = pricing.r2(entry);
+    if (opponent) {
+        players.push({ id: opponent.id, name: opponent.email, escrow: entry });
+        pot = pricing.r2(entry * 2);
+    }
+    const match = {
+        id: generateId('match'),
+        mode,
+        entry,
+        pot,
+        state: 'escrowed',
+        createdAt: Date.now(),
+        players,
+        winner: null,
+        fee: null,
+        payout: null
+    };
+    const deduct = (u) => {
+        u.credits = pricing.r2(u.credits - entry);
+        store.ledgerPush(u, { at: Date.now(), type: 'match-escrow', pts: -entry, matchId: match.id, note: 'escrowed ' + entry + ' pts entry' });
+        store.updateUser(u.id);
+    };
+    deduct(host);
+    if (opponent) deduct(opponent);
+    store.upsertMatch(match);
+    return match;
+}
+
+function settleMatch(match, winnerId) {
+    if (match.state !== 'escrowed') return null;
+    const winner = match.players.find((p) => p.id === winnerId);
+    if (!winner) return null;
+    const pot = match.pot;
+    const fee = pricing.feeForPot(pot);
+    const payout = pricing.r2(pot - fee);
+    match.state = 'settled';
+    match.winner = winnerId;
+    match.fee = fee;
+    match.payout = payout;
+    match.settledAt = Date.now();
+    match.players.forEach((p) => {
+        const u = store.getUser(p.id);
+        if (!u) return;
+        if (p.id === winnerId) {
+            u.credits = pricing.r2(u.credits + payout);
+            store.ledgerPush(u, { at: Date.now(), type: 'match-win', pts: payout, matchId: match.id, note: 'won ' + payout + ' pts (pot ' + pot + ' - house ' + fee + ')' });
+        } else {
+            store.ledgerPush(u, { at: Date.now(), type: 'match-loss', pts: 0, matchId: match.id, note: 'lost ' + p.escrow + ' pts entry' });
+        }
+        u.totalGenerationPts = pricing.r2((u.totalGenerationPts || 0) + pot);
+        u.feeGeneratedPts = pricing.r2((u.feeGeneratedPts || 0) + fee);
+        store.updateUser(u.id);
+    });
+    store.upsertMatch(match);
+    return match;
+}
+
+async function playerCredits(user) {
+    const bal = await LTC.userBalance(user.mnemonic);
+    const confirmedSats = Math.round((bal.confirmedLtc || 0) * 1e8);
+    const pendingSats = Math.round((bal.unconfirmedLtc || 0) * 1e8);
+    const unclaimedSats = Math.max(0, confirmedSats - (user.creditsClaimedSats || 0));
+    return {
+        balance: bal,
+        confirmedSats,
+        pendingSats,
+        unclaimedSats,
+        claimablePts: pricing.pointsForLtc(unclaimedSats / 1e8),
+        unclaimedLtc: pricing.r2(unclaimedSats / 1e8)
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -390,7 +501,42 @@ const server = http.createServer((req, res) => {
 
     // ---- API: LITEcrib wallet (LTC deposits + LitVM seam) ----------------------
     if (p === '/api/wallet/config' && req.method === 'GET') {
-        sendJson(res, 200, LTC.config);
+        sendJson(res, 200, {
+            ...LTC.config,
+            pricing: pricing.public(),
+            providers: providers.list()
+        });
+        return;
+    }
+
+    // ---- API: provider aggregator -------------------------------------------
+    if (p === '/api/wallet/providers' && req.method === 'GET') {
+        const user = requireUser(req);
+        sendJson(res, 200, {
+            success: true,
+            network: LTC.config.network,
+            preferred: user ? (user.preferredProvider || 'custodial') : 'custodial',
+            providers: providers.list()
+        });
+        return;
+    }
+
+    if (p === '/api/wallet/provider' && req.method === 'PUT') {
+        const user = requireUser(req);
+        if (!user) {
+            sendJson(res, 401, { success: false, error: 'unauthorized' });
+            return;
+        }
+        readBody(req).then((body) => {
+            const prov = body && body.provider;
+            if (!providers.find(prov)) {
+                sendJson(res, 400, { success: false, error: 'unknown provider' });
+                return;
+            }
+            user.preferredProvider = prov;
+            store.updateUser(user.id);
+            sendJson(res, 200, { success: true, preferred: prov });
+        });
         return;
     }
 
@@ -470,6 +616,197 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // ---- API: player credits (points economy) --------------------------------
+    if (p === '/api/player/credits' && req.method === 'GET') {
+        const user = requireUser(req);
+        if (!user) {
+            sendJson(res, 401, { success: false, error: 'unauthorized' });
+            return;
+        }
+        playerCredits(user).then((c) => {
+            sendJson(res, 200, {
+                success: true,
+                credits: user.credits,
+                confirmedLtc: c.balance.confirmedLtc || 0,
+                unconfirmedLtc: c.balance.unconfirmedLtc || 0,
+                claimablePts: c.claimablePts || 0,
+                unclaimedLtc: c.unclaimedLtc || 0,
+                pricing: pricing.public()
+            });
+        }).catch((e) => {
+            sendJson(res, 200, { success: true, credits: user.credits, claimablePts: 0, pricing: pricing.public(), error: null });
+        });
+        return;
+    }
+
+    if (p === '/api/player/credits/claim' && req.method === 'POST') {
+        const user = requireUser(req);
+        if (!user) {
+            sendJson(res, 401, { success: false, error: 'unauthorized' });
+            return;
+        }
+        playerCredits(user).then((c) => {
+            const minted = pricing.pointsForLtc(c.unclaimedSats / 1e8);
+            if (minted > 0) {
+                user.credits = pricing.r2(user.credits + minted);
+                user.creditsClaimedSats = c.confirmedSats;
+                store.ledgerPush(user, { at: Date.now(), type: 'deposit-claim', pts: minted, note: 'minted ' + minted + ' pts from ' + c.unclaimedLtc + ' confirmed LTC' });
+                store.updateUser(user.id);
+            }
+            sendJson(res, 200, {
+                success: true,
+                mintedPts: minted,
+                credits: user.credits,
+                claimablePts: 0,
+                rate: pricing.public()
+            });
+        }).catch((e) => {
+            sendJson(res, 502, { success: false, error: e.message });
+        });
+        return;
+    }
+
+    // ---- API: PvP match escrow + settlement (house fee < 1% of pot) ----------
+    if (p === '/api/games/match' && req.method === 'POST') {
+        const user = requireUser(req);
+        if (!user) {
+            sendJson(res, 401, { success: false, error: 'unauthorized' });
+            return;
+        }
+        readBody(req).then(async (body) => {
+            const opponentId = body && body.opponentId;
+            const mode = (body && body.mode) || (opponentId ? 'pvp' : 'ai');
+            const entry = pricing.minPvpEntryPoints;
+            let opponent = null;
+            if (opponentId) {
+                if (opponentId === user.id) {
+                    sendJson(res, 400, { success: false, error: 'cannot play yourself' });
+                    return;
+                }
+                opponent = store.getUser(opponentId);
+                if (!opponent) {
+                    sendJson(res, 404, { success: false, error: 'opponent not found' });
+                    return;
+                }
+                if (pricing.r2(opponent.credits) < entry) {
+                    sendJson(res, 402, { success: false, error: 'opponent needs at least ' + entry + ' pts' });
+                    return;
+                }
+            }
+            if (pricing.r2(user.credits) < entry) {
+                sendJson(res, 402, { success: false, error: 'need at least ' + entry + ' pts ($' + pricing.minPvpEntryUsd + ') to join a match' });
+                return;
+            }
+            const match = escrowMatch(user, opponent, mode);
+            sendJson(res, 200, { success: true, match: matchToJson(match), pricing: pricing.public() });
+        });
+        return;
+    }
+
+    const matchGetMatch = p.match(/^\/api\/games\/match\/([^/]+)$/);
+    if (matchGetMatch && req.method === 'GET') {
+        const user = requireUser(req);
+        const m = store.getMatch(matchGetMatch[1]);
+        if (!m) {
+            sendJson(res, 404, { success: false, error: 'match not found' });
+            return;
+        }
+        const isPlayer = !!user && m.players.some((pl) => pl.id === user.id);
+        if (!isPlayer && !isAdmin(req)) {
+            sendJson(res, 404, { success: false, error: 'match not found' });
+            return;
+        }
+        sendJson(res, 200, { success: true, match: matchToJson(m) });
+        return;
+    }
+
+    const matchResolveMatch = p.match(/^\/api\/games\/match\/([^/]+)\/resolve$/);
+    if (matchResolveMatch && req.method === 'POST') {
+        const user = requireUser(req);
+        if (!user) {
+            sendJson(res, 401, { success: false, error: 'unauthorized' });
+            return;
+        }
+        const m = store.getMatch(matchResolveMatch[1]);
+        if (!m) {
+            sendJson(res, 404, { success: false, error: 'match not found' });
+            return;
+        }
+        const isPlayer = m.players.some((pl) => pl.id === user.id);
+        if (!isPlayer && !isAdmin(req)) {
+            sendJson(res, 404, { success: false, error: 'match not found' });
+            return;
+        }
+        readBody(req).then((body) => {
+            let winnerId = body && body.winnerId;
+            if (!winnerId && m.mode === 'ai') {
+                const human = m.players.find((pl) => pl.id === user.id);
+                winnerId = human ? human.id : null;
+            }
+            if (!winnerId || !m.players.some((pl) => pl.id === winnerId)) {
+                sendJson(res, 400, { success: false, error: 'winnerId must be a participant' });
+                return;
+            }
+            const settled = settleMatch(m, winnerId);
+            if (!settled) {
+                sendJson(res, 409, { success: false, error: 'match already settled' });
+                return;
+            }
+            sendJson(res, 200, { success: true, match: matchToJson(settled) });
+        });
+        return;
+    }
+
+    // ---- API: player fees + admin stats --------------------------------------
+    if (p === '/api/player/fees' && req.method === 'GET') {
+        const user = requireUser(req);
+        if (!user) {
+            sendJson(res, 401, { success: false, error: 'unauthorized' });
+            return;
+        }
+        const my = store.listMatches().filter((m) => m.players.some((pl) => pl.id === user.id));
+        sendJson(res, 200, {
+            success: true,
+            totalGenerationPts: user.totalGenerationPts || 0,
+            totalFeesPts: user.feeGeneratedPts || 0,
+            usd: {
+                generation: pricing.usdForPoints(user.totalGenerationPts || 0),
+                fees: pricing.usdForPoints(user.feeGeneratedPts || 0)
+            },
+            games: my.map(matchToJson),
+            ledger: (user.ledger || []).slice(-20).reverse()
+        });
+        return;
+    }
+
+    if (p === '/api/admin/stats' && req.method === 'GET') {
+        if (!isAdmin(req)) {
+            sendJson(res, 401, { success: false, error: 'unauthorized' });
+            return;
+        }
+        const all = store.listMatches();
+        const settled = all.filter((m) => m.state === 'settled');
+        const potPts = pricing.r2(all.reduce((s, m) => s + (m.pot || 0), 0));
+        const feePts = pricing.r2(settled.reduce((s, m) => s + (m.fee || 0), 0));
+        sendJson(res, 200, {
+            success: true,
+            accounts: store.bySnapshot().length,
+            matches: {
+                total: all.length,
+                settled: settled.length,
+                open: all.length - settled.length
+            },
+            economy: {
+                generationPts: potPts,
+                feesPts: feePts,
+                usd: { generation: pricing.usdForPoints(potPts), fees: pricing.usdForPoints(feePts) }
+            },
+            lastMatches: all.slice(-5).reverse().map(matchToJson),
+            pricing: pricing.public()
+        });
+        return;
+    }
+
     // ---- Static files (GitHub Pages parity) ---------------------------------------
     let filePath = path.join('.', decodeURIComponent(p));
     if (filePath === '.' || filePath.endsWith(path.sep)) filePath = path.join('./index.html');
@@ -512,6 +849,8 @@ if (require.main === module) {
         if (lanIp) console.log(`  LAN (phone): http://${lanIp}:${PORT}/`);
         console.log('  Connect both devices to the SAME address above.');
         console.log('  Wallet API : /api/auth/* (SSO), /api/wallet/* (deposit, status, payout, export)');
+        console.log('  Credits    : /api/player/* (credits, claim, fees), /api/games/match (escrow + settle)');
+        console.log('  Aggregator : /api/wallet/providers (custodial, litvm, swap) — house fee ' + (pricing.houseFeeRate * 100) + '% of pot');
         console.log('  LitVM seam : /api/wallet/litvm (LiteForge testnet, chain ' + LTC.litvm.config.chainId + ')\n');
     });
 }

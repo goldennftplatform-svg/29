@@ -16,6 +16,7 @@
 const crypto = require('crypto');
 const store = require('./store');
 const wallet = require('./lit-wallet');
+const providers = require('./providers');
 
 const sessions = new Map();                    // token -> userId
 const failures = new Map();                    // key -> { fails, until }
@@ -61,7 +62,14 @@ function clearFailures(key) {
 }
 
 function publicUser(u) {
-    return { id: u.id, email: u.email, address: u.address, path: u.path, createdAt: u.createdAt };
+    return {
+        id: u.id, email: u.email, address: u.address, path: u.path, createdAt: u.createdAt,
+        litvmAddress: providers.evmAddress(u.mnemonic),
+        credits: Math.round((u.credits || 0) * 100) / 100,
+        preferredProvider: u.preferredProvider || 'custodial',
+        feeGeneratedPts: u.feeGeneratedPts || 0,
+        totalGenerationPts: u.totalGenerationPts || 0
+    };
 }
 
 function newSession(userId) {
@@ -86,7 +94,13 @@ function registerUser(email, password, ip) {
         mnemonic: w.mnemonic,                    // custody copy (see store.js note)
         address: w.address,
         path: w.path,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        credits: 0,
+        creditsClaimedSats: 0,
+        preferredProvider: 'custodial',
+        ledger: [],
+        feeGeneratedPts: 0,
+        totalGenerationPts: 0
     };
     store.addUser(user);
     return { token: newSession(user.id), user: publicUser(user) };

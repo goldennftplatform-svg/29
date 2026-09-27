@@ -1939,3 +1939,97 @@ header.pixel-header::before {
     .logo h1 { animation: none; }
     .logo-icon { animation: none; }
 }
+
+/* =========================================================
+   LITEcrib SSO + points economy (aggregator picker, fees)
+   ========================================================= */
+.sso-box {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 3px dashed var(--lite-brown);
+}
+
+.sso-input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 6px 0;
+    padding: 10px 12px;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    color: var(--lite-black);
+    background: var(--lite-white);
+    border: 3px solid var(--lite-black);
+    box-shadow: inset 2px 2px 0 var(--lite-dark-sand);
+}
+
+.sso-input:focus {
+    outline: none;
+    border-color: var(--lite-gold);
+    box-shadow: inset 2px 2px 0 var(--lite-dark-sand), 0 0 0 2px var(--lite-gold);
+}
+
+.pts-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 8px 0 6px;
+    flex-wrap: wrap;
+}
+
+.pts-chip {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 14px;
+    color: var(--lite-dark-green);
+    background: linear-gradient(180deg, #fff8e7, var(--lite-white));
+    border: 3px solid var(--lite-black);
+    box-shadow: var(--pixel-shadow-sm), inset 0 1px 0 #fff;
+    padding: 6px 10px;
+}
+
+.pts-usd {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    color: var(--lite-orange);
+    text-shadow: 1px 1px 0 var(--lite-white);
+}
+
+.provider-choice {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 8px 0;
+}
+
+.provider-opt {
+    font-family: 'Press Start 2P', mono;
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    text-align: left;
+    letter-spacing: 0.5px;
+    color: var(--lite-dark-brown);
+    background: linear-gradient(180deg, #ffffff, #eef3fb);
+    border: 3px solid var(--lite-black);
+    box-shadow: var(--pixel-shadow-sm), inset 0 1px 0 #fff;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: transform 0.08s, box-shadow 0.08s;
+}
+
+.provider-opt.selected {
+    border-color: var(--lite-gold);
+    background: linear-gradient(180deg, #fff8e7, var(--lite-white));
+    box-shadow: 3px 3px 0 var(--lite-black), 0 0 12px 2px rgba(224,192,74,.45), inset 0 1px 0 #fff;
+}
+
+.provider-opt:active { transform: translate(2px, 2px); }
+
+.sso-export { margin-top: 10px !important; }
+
+.wallet-tip.gold {
+    color: var(--lite-gold);
+    font-family: 'VT323', monospace;
+    font-size: 13px;
+    font-weight: bold;
+}
