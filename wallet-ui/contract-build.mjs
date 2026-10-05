@@ -6,57 +6,59 @@ import { createPublicClient, createWalletClient, custom, defineChain, keccak256,
 
 const source = fs.readFileSync('../contracts/PracticeDeposit.sol', 'utf8');
 const output = JSON.parse(solc.compile(JSON.stringify({
-    language: 'Solidity', sources: { 'PracticeDeposit.sol': { content: source } },
-    settings: { optimizer: { enabled: true, runs: 200 }, evmVersion: 'paris', outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object'] } } }
+    language: 'Solidity',
+    sources: { 'PracticeDeposit.sol': { content: source } },
+    settings: {
+        optimizer: { enabled: true, runs: 200 },
+        evmVersion: 'paris',
+        outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode.object'] } }
+    }
 })));
 for (const e of output.errors || []) if (e.severity === 'error') throw new Error(e.formattedMessage);
+
 const c = output.contracts['PracticeDeposit.sol'].PracticeDeposit;
 const artifact = {
-    abi: c.abi, bytecode: '0x' + c.evm.bytecode.object, runtime: '0x' + c.evm.deployedBytecode.object,
+    abi: c.abi,
+    bytecode: '0x' + c.evm.bytecode.object,
+    runtime: '0x' + c.evm.deployedBytecode.object,
     depositTopic: keccak256(toBytes('Deposited(address,uint256)')),
-    depositsSelector: keccak256(toBytes('deposits(address)')).slice(0,10), sourceCommit: process.env.GITHUB_SHA
+    depositsSelector: keccak256(toBytes('deposits(address)')).slice(0, 10),
+    entryWei: '1000000000000000',
+    sourceCommit: process.env.GITHUB_SHA
 };
-// Isolated contract tests run only on GitHub, with ephemeral accounts.
-const chain = defineChain({ id: 4441, name: 'CI', nativeCurrency: { name: 'Test', symbol: 'TEST', decimals: 18 }, rpcUrls: { default: { http: [] } } });
+
+// Contract tests run only on GitHub Actions, against an in-process chain.
+const chain = defineChain({
+    id: 4441, name: 'CI',
+    nativeCurrency: { name: 'Test zkLTC', symbol: 'zkLTC', decimals: 18 },
+    rpcUrls: { default: { http: [] } }
+});
+
 const provider = ganache.provider({ chain: { chainId: 4441 }, logging: { quiet: true } });
 try {
-    const reportedChainId = Number(await provider.request({ method: 'eth_chainId', params: [] }));
-    assert.equal(reportedChainId, 4441, 'ganache must report chain ID 4441 for the LiteForge guard');
+    assert.equal(Number(await provider.request({ method: 'eth_chainId', params: [] })), 4441,
+        'test chain must report chain ID 4441 so the LiteForge guard is meaningful');
+
     const p = createPublicClient({ chain, transport: custom(provider), cacheTime: 0 });
     const w = createWalletClient({ chain, transport: custom(provider) });
     const [alice, bob] = await w.getAddresses();
-    console.log('test accounts', alice, bob, 'chainId', reportedChainId);
-    // Estimate first so a revert surfaces its reason instead of a bare receipt.
-    try {
-        await p.estimateGas({ account: alice, data: artifact.bytecode });
-        console.log('deploy estimate OK');
-    } catch (e) {
-        console.log('DEPLOY ESTIMATE FAILED:', e.shortMessage || e.message, e.details || '');
-        throw new Error('deploy estimate failed: ' + (e.shortMessage || e.message));
-    }
-    let tx;
-    try {
-        tx = await w.deployContract({ account: alice, abi: artifact.abi, bytecode: artifact.bytecode });
-    } catch (e) {
-        console.log('DEPLOY SEND FAILED:', e.shortMessage || e.message);
-        tx = undefined;
-    }
-    let receipt = tx ? await p.waitForTransactionReceipt({ hash: tx }) : null;
-    if (!receipt || receipt.status !== 'success') {
-        console.log('RAW RECEIPT', JSON.stringify(await provider.request({ method: 'eth_getTransactionReceipt', params: [tx] })));
-        console.log('creation code bytes', (artifact.bytecode.length - 2) / 2, 'runtime bytes', (artifact.runtime.length - 2) / 2);
-        console.log('retrying with explicit gas and legacy type');
-        const prepared = await p.prepareTransactionRequest({ account: alice, data: artifact.bytecode, chain: chain, gas: 3_000_000n });
-        const retryHash = await w.sendTransaction({ account: alice, chain: chain, data: prepared.data, gas: prepared.gas, type: 'legacy' });
-        receipt = await p.waitForTransactionReceipt({ hash: retryHash });
-        console.log('retry receipt status', receipt.status);
-    }
-    if (receipt.status !== 'success') throw new Error('deployment reverted');
-    const address = receipt.contractAddress;
-    assert.ok(address, 'deployment produced no contract address');
-    const onChainCode = await p.getCode({ address });
-    assert.equal(onChainCode, artifact.runtime, 'deployed runtime bytecode must match the compiled artifact');
-    const entry = 1000000000000000n;
+
+    // ganache mines viem's default EIP-1559 deployment transaction as failed
+    // (status 0x0), so deploy with an explicit gas limit and legacy envelope.
+    const prepared = await p.prepareTransactionRequest({
+        account: alice, data: artifact.bytecode, chain, gas: 3_000_000n
+    });
+    const deployReceipt = await p.waitForTransactionReceipt({
+        hash: await w.sendTransaction({ account: alice, chain, data: prepared.data, gas: prepared.gas, type: 'legacy' })
+    });
+    assert.equal(deployReceipt.status, 'success', 'deployment must succeed');
+
+    const address = deployReceipt.contractAddress;
+    assert.ok(address, 'deployment must produce a contract address');
+    assert.equal(await p.getCode({ address }), artifact.runtime,
+        'deployed runtime bytecode must match the compiled artifact');
+
+    const entry = BigInt(artifact.entryWei);
     const write = async (account, functionName, value = 0n) => {
         const { request } = await p.simulateContract({ address, abi: artifact.abi, functionName, account, value });
         const result = await p.waitForTransactionReceipt({ hash: await w.writeContract(request) });
@@ -64,28 +66,42 @@ try {
         return result;
     };
     const held = account => p.readContract({ address, abi: artifact.abi, functionName: 'deposits', args: [account] });
-    await assert.rejects(() => write(alice, 'deposit', entry - 1n));
+
+    // Exact amount only, one active deposit per wallet, balances stay isolated,
+    // refunds clear the record, and a redeposit after refund still works.
+    await assert.rejects(() => write(alice, 'deposit', entry - 1n), 'wrong amount must be rejected');
     await write(alice, 'deposit', entry);
-    assert.equal(await held(alice), entry);
-    await assert.rejects(() => write(alice, 'deposit', entry));
-    await assert.rejects(() => write(bob, 'refund'));
+    assert.equal(await held(alice), entry, 'alice holds exactly the entry amount');
+    await assert.rejects(() => write(alice, 'deposit', entry), 'duplicate deposit must be rejected');
+    await assert.rejects(() => write(bob, 'refund'), 'refund with no deposit must be rejected');
+
     await write(bob, 'deposit', entry);
     await write(alice, 'refund');
-    assert.equal(await held(alice), 0n);
-    assert.equal(await held(bob), entry);
-    await assert.rejects(() => write(alice, 'refund'));
+    assert.equal(await held(alice), 0n, 'alice refunded to zero');
+    assert.equal(await held(bob), entry, "bob's deposit is untouched by alice's refund");
+    await assert.rejects(() => write(alice, 'refund'), 'double refund must be rejected');
     await write(bob, 'refund');
-    assert.equal(await p.getBalance({ address, blockTag: 'latest' }), 0n);
+    assert.equal(await p.getBalance({ address, blockTag: 'latest' }), 0n, 'contract holds no test funds');
+
     await write(alice, 'deposit', entry);
     await write(alice, 'refund');
     console.log('PASS: exact deposit, duplicate refusal, isolated balances, refund, double-refund refusal, redeposit');
-} finally { await provider.disconnect(); }
+} finally {
+    await provider.disconnect();
+}
+
+// The constructor guard must block deployment on any other chain.
 const wrongProvider = ganache.provider({ chain: { chainId: 1 }, logging: { quiet: true } });
 try {
     const p = createPublicClient({ transport: custom(wrongProvider), cacheTime: 0 });
-    const [account] = (await wrongProvider.request({ method: 'eth_accounts', params: [] }));
-    await assert.rejects(() => p.estimateGas({ account, data: artifact.bytecode }));
+    const [account] = await wrongProvider.request({ method: 'eth_accounts', params: [] });
+    await assert.rejects(() => p.estimateGas({ account, data: artifact.bytecode }),
+        'deployment must fail when block.chainid is not 4441');
     console.log('PASS: cannot deploy on Ethereum mainnet chain ID');
-} finally { await wrongProvider.disconnect(); }
+} finally {
+    await wrongProvider.disconnect();
+}
+
 fs.mkdirSync('../wallet-assets', { recursive: true });
 fs.writeFileSync('../wallet-assets/practice-contract.json', JSON.stringify(artifact, null, 2));
+console.log('wrote wallet-assets/practice-contract.json');
