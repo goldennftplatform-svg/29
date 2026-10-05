@@ -28,8 +28,18 @@
     }
 
     function getPlayerId() {
-        if (window.network && window.network.playerId) return window.network.playerId;
+        // GameNetwork is the current transport; window.network is a legacy global.
+        if (window.game && window.game.network && window.game.network.playerId) return window.game.network.playerId;
         try { return localStorage.getItem(LS_PLAYER) || ''; } catch (e) { return ''; }
+    }
+
+    // Static hosts (GitHub Pages) have no relay, so every /api/* call is a
+    // guaranteed 404/405. Detect once and skip the network entirely rather than
+    // logging failed requests the code promises never to make.
+    function relayAvailable() {
+        var loc = window.location;
+        if (loc.protocol === 'file:') return false;
+        return !/(^|\.)github\.io$/.test(loc.hostname);
     }
 
     function getToken() {
@@ -249,6 +259,14 @@
 
     async function init() {
         if (!cfg.features || !cfg.features.paymentsEnabled) return;
+        if (!relayAvailable()) {
+            // Static hosting: hide the relay-only panel instead of probing
+            // endpoints that cannot answer. LiteForge testnet onboarding lives
+            // on wallet-setup.html and needs no relay.
+            var hiddenPanel = document.getElementById('wallet-panel');
+            if (hiddenPanel) hiddenPanel.hidden = true;
+            return;
+        }
         panel = document.getElementById('wallet-panel');
         if (!panel) return;
 
