@@ -24,9 +24,26 @@ try {
     assert.equal(reportedChainId, 4441, 'ganache must report chain ID 4441 for the LiteForge guard');
     const p = createPublicClient({ chain, transport: custom(provider), cacheTime: 0 });
     const w = createWalletClient({ chain, transport: custom(provider) });
-    const [alice, bob] = await w.getAccounts();
-    console.log('test accounts', alice, bob);
-    const tx = await w.deployContract({ account: alice, abi: artifact.abi, bytecode: artifact.bytecode });
+    const [alice, bob] = await w.getAddresses();
+    console.log('test accounts', alice, bob, 'chainId', reportedChainId);
+    // Estimate first so a revert surfaces its reason instead of a bare receipt.
+    try {
+        await p.estimateGas({ account: alice, data: artifact.bytecode });
+        console.log('deploy estimate OK');
+    } catch (e) {
+        console.log('DEPLOY ESTIMATE FAILED:', e.shortMessage || e.message, e.details || '');
+        throw new Error('deploy estimate failed: ' + (e.shortMessage || e.message));
+    }
+    let tx;
+    try {
+        tx = await w.deployContract({ account: alice, abi: artifact.abi, bytecode: artifact.bytecode });
+    } catch (e) {
+        console.log('DEPLOY SEND FAILED:', e.shortMessage || e.message);
+        // Retry as an explicit legacy transaction.
+        const { data, gas } = await p.prepareTransactionRequest({ account: alice, data: artifact.bytecode, chain: chain });
+        console.log('legacy retry with gas', gas);
+        tx = await w.sendTransaction({ account: alice, data, gas, chain: chain, type: 'legacy' });
+    }
     const receipt = await p.waitForTransactionReceipt({ hash: tx });
     if (receipt.status !== 'success') throw new Error('deployment reverted at nonce ' + receipt.nonce);
     const address = receipt.contractAddress;
