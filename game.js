@@ -280,6 +280,7 @@ class CribbageGame {
     }
 
     buildBoardGeo() {
+        if (window.CountryBoards) return CountryBoards.geometry();
         const p = 13; // hole pitch
         const holes = [];
         const cur = { x: 20, y: 100 };
@@ -304,6 +305,7 @@ class CribbageGame {
     }
 
     pegPosition(score, geo) {
+        if (score <= 0 && geo.start) return geo.start;
         const pos = Math.max(1, Math.min(score, 121));
         if (pos === 121) return geo.game;
         return geo.holes[pos - 1];
@@ -313,10 +315,12 @@ class CribbageGame {
         const track = document.getElementById('board-track');
         if (!track) return;
         const geo = this.boardGeo || (this.boardGeo = this.buildBoardGeo());
+        const lanes = state.players.map((_,idx) => geo.outline ? CountryBoards.lane(geo,idx) : geo);
+        track.setAttribute('aria-label', `${geo.name || 'Cribbage'} score board. ${state.players.map(p => p.name + ': ' + p.score).join(', ')}`);
         const PEG_STYLES = [
-            { fill: '#d4a843', edge: '#8a6a1f' },
-            { fill: '#2e5c8a', edge: '#16334f' },
-            { fill: '#a83232', edge: '#5e1616' }
+            { fill: '#ffcc4d', edge: '#10131c' },
+            { fill: '#45c5ff', edge: '#10131c' },
+            { fill: '#ff6380', edge: '#10131c' }
         ];
 
         let svg = '';
@@ -329,7 +333,15 @@ class CribbageGame {
             '</linearGradient>' +
             '</defs>';
 
-        // Board base (wood plank)
+        if (geo.outline) {
+            svg += `<defs><pattern id="paintMarks" width="27" height="39" patternUnits="userSpaceOnUse"><path d="M4 6l2 6M19 25l-1 7" stroke="${geo.color}" stroke-width="2" stroke-linecap="round" opacity=".23"/></pattern></defs>`;
+            svg += `<rect x="4" y="4" width="852" height="512" rx="20" fill="#101724"/>`;
+            svg += `<rect x="4" y="4" width="852" height="512" rx="20" fill="url(#paintMarks)"/>`;
+            svg += `<path d="${geo.outline}" fill="${geo.color}" fill-opacity=".17" stroke="${geo.color}" stroke-width="17" stroke-opacity=".2" stroke-linejoin="round"/>`;
+            if (geo.interior) svg += `<path d="${geo.interior}" fill="#101724" stroke="${geo.color}" stroke-width="1"/>`;
+            svg += `<text x="430" y="42" text-anchor="middle" class="board-country-name">${geo.name.toUpperCase()}</text><text x="430" y="65" text-anchor="middle" class="board-country-caption">LITEcrib · THE COUNTRY COLLECTION</text>`;
+        } else {
+        // Legacy board fallback
         svg += '<rect x="4" y="4" width="852" height="512" rx="20" fill="url(#woodGrad)" stroke="#3E2C16" stroke-width="3"/>';
         for (let y = 90; y < 512; y += 60) {
             svg += `<line x1="20" y1="${y}" x2="840" y2="${y}" stroke="#AE8858" stroke-width="1" opacity="0.5"/>`;
@@ -340,26 +352,33 @@ class CribbageGame {
         svg += `<rect x="336" y="28" width="188" height="52" rx="8" fill="url(#brassGrad)" stroke="#8A6A1F" stroke-width="2"/>
             <text x="430" y="50" text-anchor="middle" class="board-emblem">29</text>
             <text x="430" y="72" text-anchor="middle" class="board-caption">CRIBBAGE</text>`;
+        }
 
-        // Holes 1-120 shaped as the numeral 29
-        for (let i = 0; i < geo.holes.length; i++) {
+        // Each player has an independent contour lane, preserving scoring semantics.
+        lanes.forEach((lane,laneIndex) => {
+        svg += `<g data-lane="${laneIndex}" style="color:${PEG_STYLES[laneIndex].fill}">`;
+        svg += `<path d="M ${lane.start?.x || lane.holes[0].x} ${lane.start?.y || lane.holes[0].y} ${lane.holes.map(p=>`L ${p.x} ${p.y}`).join(' ')} L ${lane.game.x} ${lane.game.y}" fill="none" stroke="currentColor" stroke-width="1" opacity=".45"/>`;
+        for (let i = 0; i < lane.holes.length; i++) {
             const pos = i + 1;
             let cls = 'board-hole';
             if (pos % 5 === 0) cls += ' hole-5';
             if (pos % 10 === 0) cls += ' hole-10';
             if (pos === 90) cls += ' hole-skunk';
-            svg += `<circle cx="${geo.holes[i].x}" cy="${geo.holes[i].y}" r="${geo.r}" class="${cls}" data-hole="${pos}"/>`;
+            svg += `<circle cx="${lane.holes[i].x}" cy="${lane.holes[i].y}" r="${lane.r}" class="${cls}" data-hole="${pos}"/>`;
         }
         // Game hole 121
-        svg += `<circle cx="${geo.game.x}" cy="${geo.game.y}" r="${geo.r + 1.6}" class="board-hole game-hole" data-hole="121"/>`;
+        svg += `<circle cx="${lane.game.x}" cy="${lane.game.y}" r="${lane.r + 1.6}" class="board-hole game-hole" data-hole="121"/>`;
+        if(lane.start) svg += `<circle cx="${lane.start.x}" cy="${lane.start.y}" r="4" fill="none" stroke="currentColor" data-hole="0"/>`;
+        svg += '</g>';
+        });
 
         // Markers + numbers
         for (let i = 9; i < geo.holes.length; i += 10) {
             const h = geo.holes[i];
             svg += `<text x="${h.x}" y="${h.y + 15}" text-anchor="middle" class="board-label">${i + 1}</text>`;
         }
-        svg += `<text x="40" y="84" text-anchor="start" class="board-start">START</text>`;
-        svg += `<text x="${geo.game.x}" y="${geo.game.y + 30}" text-anchor="middle" class="board-win">121 WIN</text>`;
+        svg += `<text x="${geo.start ? geo.start.x + 12 : 40}" y="${geo.start ? geo.start.y - 10 : 84}" text-anchor="start" class="board-start">START →</text>`;
+        svg += `<text x="${geo.game.x - 12}" y="${geo.game.y - 12}" text-anchor="end" class="board-win">121 WIN</text>`;
         const skunkHole = geo.holes[89];
         svg += `<text x="${skunkHole.x}" y="${skunkHole.y - 12}" text-anchor="middle" class="board-skunk">SKUNK</text>`;
 
@@ -382,8 +401,9 @@ class CribbageGame {
             const style = PEG_STYLES[idx % PEG_STYLES.length];
             const backScore = this.lastPegBefore[idx];
             if (backScore == null) return;
-            const back = this.pegPosition(backScore, geo);
-            const front = this.pegPosition(player.score, geo);
+            const lane = lanes[idx];
+            const back = this.pegPosition(backScore, lane);
+            const front = this.pegPosition(player.score, lane);
             if (back.x === front.x && back.y === front.y) return;
 
             let d = `M ${back.x} ${back.y}`;
@@ -391,7 +411,7 @@ class CribbageGame {
             const lo = Math.max(1, Math.min(backScore, 121));
             const hi = Math.max(1, Math.min(player.score, 121));
             for (let h = lo + 1; h <= hi; h++) {
-                const c = h <= 120 ? geo.holes[h - 1] : geo.game;
+                const c = h <= 120 ? lane.holes[h - 1] : lane.game;
                 d += ` L ${c.x} ${c.y}`;
                 len += Math.hypot(c.x - back.x, c.y - back.y);
             }
@@ -410,8 +430,8 @@ class CribbageGame {
         state.players.forEach((player, idx) => {
             const style = PEG_STYLES[idx % PEG_STYLES.length];
             const backScore = this.lastPegBefore[idx];
-            const back = backScore != null ? this.pegPosition(backScore, geo) : null;
-            const front = this.pegPosition(player.score, geo);
+            const back = backScore != null ? this.pegPosition(backScore, lanes[idx]) : null;
+            const front = this.pegPosition(player.score, lanes[idx]);
             const moved = !reduceMotion && prevPegs[idx] != null && prevPegs[idx] !== player.score;
 
             if (back && (back.x !== front.x || back.y !== front.y)) {
@@ -434,7 +454,7 @@ class CribbageGame {
         // Breathing beacon on the hole your front peg just landed on
         const local = state.players[this.localPlayerIndex];
         if (local) {
-            const fp = this.pegPosition(local.score, geo);
+            const fp = this.pegPosition(local.score, lanes[this.localPlayerIndex]);
             svg += `<circle class="hole-pulse" cx="${fp.x}" cy="${fp.y}" r="9"/>`;
         }
 
@@ -447,6 +467,7 @@ class CribbageGame {
         const scoreContainer = document.getElementById('player-scores');
         scoreContainer.innerHTML = state.players.map((player, idx) => `
             <div class="player-score-entry ${idx === state.currentPlayer ? 'current' : ''}">
+                ${window.PlayerProfile ? PlayerProfile.markup(player.name, idx === this.localPlayerIndex) : ''}
                 <span class="name">${this.escapeHtml(player.name)}</span>
                 <span class="score">${player.score}</span>
             </div>
@@ -464,6 +485,7 @@ class CribbageGame {
             
             return `
                 <div class="opponent-panel ${isCurrent ? 'current-turn' : ''} ${isDealer ? 'dealer' : ''}" data-player="${actualIdx}">
+                    ${window.PlayerProfile ? PlayerProfile.markup(player.name, false) : ''}
                     <div class="opponent-name">${this.escapeHtml(player.name)}</div>
                     <div class="opponent-cards">
                         ${Array.from({length: player.handSize}, (_, i) => `
@@ -528,6 +550,9 @@ class CribbageGame {
     }
 
     renderPlayerHand(state) {
+        const seat = document.getElementById('local-seat');
+        const me = state.players[this.localPlayerIndex];
+        if(seat && me) seat.innerHTML = `${window.PlayerProfile ? PlayerProfile.markup(me.name, true) : ''}<span>${this.escapeHtml(me.name)}</span>`;
         const hand = state.hand || [];
         const container = document.getElementById('hand-cards');
         

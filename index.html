@@ -10,6 +10,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦁</text></svg>">
     <title>LITEcrib - Litecoin Cribbage</title>
     <link rel="stylesheet" href="styles.css?v=20260927-econ">
+    <link rel="stylesheet" href="safari-brand.css?v=country1">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -62,6 +63,24 @@
                         </div>
                     </div>
                 </div>
+
+                <section class="profile-customizer" aria-label="Personalize your table">
+                    <h2>YOUR SEAT. YOUR SAFARI.</h2>
+                    <div class="profile-grid">
+                        <div>
+                            <label for="country-select">Choose your country board</label>
+                            <select id="country-select"></select>
+                            <div id="country-preview"></div>
+                        </div>
+                        <div>
+                            <div id="portrait-preview"></div>
+                            <label for="portrait-upload">Your player portrait</label>
+                            <input id="portrait-upload" type="file" accept="image/jpeg,image/png,image/webp">
+                            <button id="portrait-remove" class="pixel-btn secondary" type="button">REMOVE PHOTO</button>
+                            <small id="portrait-status" role="status">Optional. Saved on this browser. No generated portraits.</small>
+                        </div>
+                    </div>
+                </section>
 
                 <div class="player-setup">
                     <h2>YOUR NAME</h2>
@@ -136,14 +155,15 @@
                     </div>
                 </header>
 
-                <!-- Score Board / Crib Board (track shaped as "29") -->
+                <!-- Country outline score board -->
                 <div class="crib-board" id="crib-board">
                     <div class="board-wrap">
-                        <svg class="peg-board" id="board-track" viewBox="0 0 860 520" preserveAspectRatio="xMidYMid meet"></svg>
+                        <svg class="peg-board country-track" id="board-track" viewBox="0 0 860 520" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Country-shaped cribbage score board"></svg>
                     </div>
                     <div class="board-info">
                         <div class="player-score" id="player-scores"></div>
                     </div>
+                    <p class="board-scroll-hint">Follow your colored lane to 121. Swipe the map on small screens.</p>
                 </div>
 
                 <!-- Game Area -->
@@ -199,6 +219,7 @@
 
                     <!-- Player Hand (Bottom) -->
                     <div class="player-area">
+                        <div class="local-seat" id="local-seat"></div>
                         <div class="hand-label">YOUR HAND</div>
                         <div class="turn-status" id="turn-status">SETTING UP...</div>
                         <div class="hand-cards" id="hand-cards"></div>
@@ -256,7 +277,9 @@
     </div>
 
     <script src="config.js?v=20260927-econ"></script>
-    <script src="game.js?v=20260920-startup"></script>
+    <script src="country-boards.js?v=country1"></script>
+    <script src="player-profile.js?v=country1"></script>
+    <script src="game.js?v=country1"></script>
     <script src="network.js?v=20260920-startup"></script>
     <script src="cribbage-engine.js?v=20260920-startup"></script>
     <script src="main.js?v=20260920-startup"></script>

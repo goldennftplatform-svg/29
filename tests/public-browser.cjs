@@ -2,15 +2,15 @@
 const { chromium, devices } = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const url = 'https://goldennftplatform-svg.github.io/LITEcrib/';
+const url = 'https://goldennftplatform-svg.github.io/29/';
 
 (async () => {
     fs.mkdirSync('public-evidence', { recursive: true });
     // Wait for Pages to publish the revision under test, rather than test stale JS.
-    const expected = fs.readFileSync('network.js', 'utf8').replace(/\r\n/g, '\n');
+    const expected = fs.readFileSync('game.js', 'utf8').replace(/\r\n/g, '\n');
     let published = false;
     for (let i = 0; i < 60; i++) {
-        const response = await fetch(url + 'network.js?revision=' + process.env.GITHUB_SHA + '&attempt=' + i);
+        const response = await fetch(url + 'game.js?revision=' + process.env.GITHUB_SHA + '&attempt=' + i);
         if (response.ok && (await response.text()).replace(/\r\n/g, '\n') === expected) {
             published = true;
             break;
@@ -20,10 +20,11 @@ const url = 'https://goldennftplatform-svg.github.io/LITEcrib/';
     assert.ok(published, 'Pages must serve the committed networking file');
     const browser = await chromium.launch();
     try {
-        for (const [label, options, mode] of [
-            ['desktop', { viewport: { width: 1440, height: 1000 } }, '1v1'],
-            ['phone', devices['Pixel 7'], '1v1'],
-            ['trio', { viewport: { width: 1280, height: 900 } }, '3player']
+        for (const [label, options, mode, country] of [
+            ['desktop', { viewport: { width: 1440, height: 1000 } }, '1v1', 'kenya'],
+            ['phone', devices['Pixel 7'], '1v1', 'tanzania'],
+            ['trio', { viewport: { width: 1280, height: 900 } }, '3player', 'southafrica'],
+            ['island', devices['Pixel 7'], '1v1', 'madagascar']
         ]) {
             const context = await browser.newContext(options);
             const page = await context.newPage();
@@ -32,6 +33,12 @@ const url = 'https://goldennftplatform-svg.github.io/LITEcrib/';
             try {
                 await page.goto(url + '?test=' + process.env.GITHUB_SHA, { waitUntil: 'networkidle' });
                 await page.waitForFunction(() => window.game && window.game.network.connected);
+                await page.locator('#country-select').selectOption(country);
+                if (label === 'desktop') {
+                    // Tiny image fixture exercises upload/resize/storage; not a generated PFP.
+                    await page.locator('#portrait-upload').setInputFiles({ name:'fixture.png', mimeType:'image/png', buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64') });
+                    await page.waitForFunction(() => !!document.querySelector('#portrait-preview img'));
+                }
                 await page.locator('#player-name').fill('GITHUB TEST');
                 await page.locator('#join-btn').click();
                 await page.locator('#modal-actions [data-action="OK"]').click();
@@ -40,6 +47,11 @@ const url = 'https://goldennftplatform-svg.github.io/LITEcrib/';
                 await page.waitForFunction(() => document.querySelector('#game-screen').classList.contains('active'));
                 assert.equal(await page.evaluate(() => game.engine.players.length), mode === '1v1' ? 2 : 3);
                 assert.equal(await page.evaluate(() => game.engine.phase), 'DISCARD');
+                assert.equal(await page.evaluate(() => game.boardGeo.key), country);
+                assert.equal(await page.locator('[data-lane="0"] [data-hole]').count(), 122);
+                assert.equal(await page.locator('#board-track [data-lane]').count(), mode === '1v1' ? 2 : 3);
+                if (label === 'desktop') assert.equal(await page.locator('#local-seat img').count(), 1);
+                await page.waitForFunction(() => game.engine.getState(game.localPlayerIndex).canDiscard);
                 const discardCount = await page.evaluate(() => game.engine.getState(game.localPlayerIndex).discardCount);
                 for (let i = 0; i < discardCount; i++) {
                     await page.locator('#hand-cards .card[data-index="' + i + '"]').click();

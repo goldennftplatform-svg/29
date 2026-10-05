@@ -1,0 +1,35 @@
+/* Palette and mark-making inspired by the supplied giraffe/lion paintings. */
+:root { --safari-ink:#10131c; --safari-blue:#238dde; --safari-gold:#ffca46; --safari-coral:#ff536b; }
+body { background:radial-gradient(ellipse at 5% 12%,#238dde88,transparent 45%),radial-gradient(ellipse at 95% 85%,#ff536b55,transparent 45%),#10131c; }
+.pixel-header { position:relative; overflow:hidden; border-bottom:3px solid #ffca46; background:repeating-linear-gradient(113deg,transparent 0 24px,#ffffff09 25px 29px,transparent 30px 42px),linear-gradient(125deg,#123e6c,#217fc2 44%,#6a2c49); padding:30px 18px!important; }
+.pixel-header::after { content:''; position:absolute; inset:0; pointer-events:none; opacity:.35; background-image:radial-gradient(ellipse,#ffe7a6 1px,transparent 2px); background-size:19px 31px; }
+.logo,.tagline { position:relative; z-index:1; }
+.logo h1 { color:#ffdc75!important; background:none!important; -webkit-text-fill-color:#ffdc75!important; text-shadow:3px 3px 0 #10131c!important; }
+.tagline { color:#fff1d4!important; letter-spacing:2px; }
+.profile-customizer { margin:20px 0; padding:20px; background:#111c2b; border:2px solid #308ac0; border-radius:16px; }
+.profile-customizer h2 { color:#ffca46; line-height:1.6; }
+.profile-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+.profile-grid label,.profile-grid small { display:block; margin:10px 0; color:#e8e1d3; font:16px/1.5 system-ui,sans-serif; }
+.profile-grid select { width:100%; padding:12px; border:1px solid #55ace5; background:#0b1525; color:#fff; border-radius:8px; font:15px system-ui; }
+.profile-grid input { max-width:100%; font:14px system-ui; color:#fff; }
+#country-preview svg { width:100%; height:140px; }
+.seat-portrait { width:56px; height:56px; flex-shrink:0; object-fit:cover; border-radius:50%; border:3px solid #ffca46; background:#101b2a; box-shadow:3px 3px 0 #07090e; }
+.seat-empty { display:inline-flex; align-items:center; justify-content:center; color:#73b9e5; font:28px system-ui; border-style:dashed; }
+.player-score-entry { display:flex; align-items:center; gap:8px; }
+.player-score-entry .seat-portrait { width:34px; height:34px; font-size:18px; border-width:2px; }
+.opponent-panel .seat-portrait { margin:0 auto 8px; }
+.local-seat { display:flex; align-items:center; justify-content:center; gap:12px; padding:8px; font:600 16px system-ui; color:#ffdf8d; }
+.crib-board { background:#101724!important; border:2px solid #367b9f!important; border-radius:18px!important; }
+.board-wrap { background:#101724; border-radius:16px; }
+.peg-board { width:100%; }
+.board-country-name { font:700 26px system-ui; fill:#ffdc75; letter-spacing:3px; }
+.board-country-caption { font:13px system-ui; fill:#e2d9c6; letter-spacing:2px; }
+.board-label { fill:#fff4d0!important; font:700 11px system-ui!important; paint-order:stroke; stroke:#111823; stroke-width:3px; }
+.board-start,.board-win,.board-skunk { fill:#ffdd7d!important; font:700 11px system-ui!important; paint-order:stroke; stroke:#111823; stroke-width:3px; }
+.country-track .board-hole { fill:#080e18!important; stroke:#e6d5b0!important; stroke-width:.8px; }
+.country-track .hole-5 { fill:#ffdb91!important; }
+.country-track .hole-skunk { stroke:#ff617a!important; stroke-width:2px; }
+.country-track .game-hole { fill:#ffca46!important; stroke:#fff!important; stroke-width:2px; }
+.country-track .peg { filter:drop-shadow(0 1px 2px #000); }
+.board-scroll-hint { color:#e8ddc4; text-align:center; font:13px/1.5 system-ui; margin:6px; }
+@media(max-width:600px) { .profile-grid { grid-template-columns:1fr; } .profile-customizer { padding:14px; } .board-wrap { overflow-x:auto!important; -webkit-overflow-scrolling:touch; } .board-wrap .peg-board { min-width:650px; max-width:none!important; } }
