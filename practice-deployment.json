@@ -1,7 +1,7 @@
 {
   "chainId": 4441,
-  "address": null,
-  "deploymentTransaction": null,
+  "address": "0xbaaa05146184e8f206cdade8b2ff1f2e0c42fa33",
+  "deploymentTransaction": "0xfd2f653065a948d2b2c3c757834810dd67ad915e1cf2fde7fbe98b8fe421cb8c",
   "entryWei": "1000000000000000",
   "purpose": "Refundable practice deposits; no winnings or house fee"
 }
