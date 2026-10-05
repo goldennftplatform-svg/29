@@ -86,6 +86,21 @@ try {
     await write(alice, 'deposit', entry);
     await write(alice, 'refund');
     console.log('PASS: exact deposit, duplicate refusal, isolated balances, refund, double-refund refusal, redeposit');
+
+    // The artifact's entryWei must equal the contract's own ENTRY, and the hex the wallet
+    // sends must decode back to it. A hand-written hex literal once drifted 1000x here
+    // (0xde0b6b3a7640000 == 1e18 wei, not 1e15), which made a valid deposit fail against a
+    // funded wallet instead of failing CI.
+    assert.equal(entry, 1_000_000_000_000_000n,
+        'artifact entryWei must be 0.001 zkLTC and must track contracts/PracticeDeposit.sol ENTRY');
+    assert.equal(BigInt('0x' + entry.toString(16)), entry,
+        'the hex quantity derived from entryWei must decode back to entryWei');
+    await p.simulateContract({ address, abi: artifact.abi, functionName: 'deposit', account: alice, value: entry });
+    await assert.rejects(
+        () => p.simulateContract({ address, abi: artifact.abi, functionName: 'deposit', account: alice, value: entry * 1000n }),
+        'a 1000x overpayment must be rejected, proving ENTRY is 0.001 and not 1 zkLTC'
+    );
+    console.log(`PASS: entryWei=${entry} (0.001 zkLTC), hex 0x${entry.toString(16)}, 1000x overpayment rejected`);
 } finally {
     await provider.disconnect();
 }

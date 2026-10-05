@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { PrivyProvider, usePrivy, useWallets, useCreateWallet, useSendTransaction } from '@privy-io/react-auth';
-import { defineChain, createPublicClient, http, formatEther, encodeFunctionData } from 'viem';
+import { defineChain, createPublicClient, http, formatEther, encodeFunctionData, toHex } from 'viem';
 
 const chain = defineChain({
     id: 4441,
@@ -13,8 +13,12 @@ const chain = defineChain({
 });
 const client = createPublicClient({ chain, transport: http(undefined, { timeout: 15000, retryCount: 1 }) });
 
-const ENTRY_WEI = 1000000000000000n;
-const ENTRY_HEX = '0xde0b6b3a7640000'; // 0.001 zkLTC — Privy expects a hex Quantity.
+const ENTRY_WEI = 1000000000000000n; // 0.001 zkLTC — fallback only; prefer artifact.entryWei (built from contracts/PracticeDeposit.sol)
+function entryWeiFor(artifact) {
+    const fromArtifact = artifact?.entryWei ? BigInt(artifact.entryWei) : null;
+    if (fromArtifact !== null && fromArtifact !== ENTRY_WEI) throw new Error(`Artifact entry ${fromArtifact} != expected ${ENTRY_WEI}`);
+    return fromArtifact ?? ENTRY_WEI;
+}
 
 class Boundary extends React.Component {
     state = { failed: false };
@@ -63,7 +67,7 @@ function Wallet() {
         return receipt.status === 'success' && receipt.from.toLowerCase() === address.toLowerCase() &&
             receipt.to?.toLowerCase() === deployment.address.toLowerCase() && receipt.logs.some(log =>
                 log.address.toLowerCase() === deployment.address.toLowerCase() && log.topics[0] === artifact.depositTopic &&
-                log.topics[1]?.slice(-40).toLowerCase() === address.slice(2).toLowerCase() && BigInt(log.data) === ENTRY_WEI);
+                log.topics[1]?.slice(-40).toLowerCase() === address.slice(2).toLowerCase() && BigInt(log.data) === entryWeiFor(artifact));
     }
 
     useEffect(() => {
@@ -92,11 +96,14 @@ function Wallet() {
         if (kind !== 'deploy') {
             if (!deployment?.address || deployment.chainId !== 4441) throw new Error('Testnet contract not deployed yet');
             if (await client.getCode({ address:deployment.address }) !== artifact.runtime) throw new Error('Contract verification failed');
-            await client.simulateContract({ address:deployment.address, abi:artifact.abi, functionName:kind, account:address, value:kind === 'deposit' ? 1000000000000000n : 0n });
+            await client.simulateContract({ address:deployment.address, abi:artifact.abi, functionName:kind, account:address, value:kind === 'deposit' ? entryWeiFor(artifact) : 0n });
         }
+        // Derive the value from the artifact and send exactly what we simulated: a hand-written
+        // hex literal once drifted 1000x and asked the depositor for 1 zkLTC instead of 0.001.
+        const entryWei = entryWeiFor(artifact);
         const request = kind === 'deploy'
             ? { data:artifact.bytecode, value:'0x0', chainId:4441 }
-            : { to:deployment.address, data:encodeFunctionData({ abi:artifact.abi, functionName:kind }), value:kind === 'deposit' ? ENTRY_HEX : '0x0', chainId:4441 };
+            : { to:deployment.address, data:encodeFunctionData({ abi:artifact.abi, functionName:kind }), value:kind === 'deposit' ? toHex(entryWei) : '0x0', chainId:4441 };
         const { hash } = await sendTransaction(request, { address, uiOptions:{ showWalletUIs:true } });
         setTransaction(hash); setNotice('Transaction submitted. Waiting for chain confirmation…');
         if (kind === 'deposit') localStorage.setItem('litecrib-practice-tx:' + address.toLowerCase(), hash);
@@ -160,9 +167,9 @@ function Wallet() {
         </ol>
         {!authenticated ? <>
             <h2>A wallet without the setup headache</h2>
-            <p>Sign in with Google or email. Privy creates an Ethereum-compatible wallet for LiteForge—no browser extension or Solana RPC needed.</p>
+            <p>Sign in with email. Privy creates an Ethereum-compatible wallet for LiteForge — no browser extension, no seed phrase to manage, no Solana RPC needed.</p>
             <button id="email-login" onClick={() => login({ loginMethods: ['email'] })}>Continue with email</button>
-            <p className="hint">Google sign-in will be added after the email pilot.</p>
+            <p className="hint">After signing in you will see your balance, plus buttons to deposit 0.001 test zkLTC and launch a practice game. Google sign-in will be added after the email pilot.</p>
         </> : <>
             <p>Signed in{user?.google?.email || user?.email?.address ? ' as ' + (user.google?.email || user.email?.address) : ''}</p>
             {!walletsReady ? <p role="status">Loading your wallet…</p> : !wallet ? <>
