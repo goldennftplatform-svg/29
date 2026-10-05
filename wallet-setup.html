@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#142448">
+    <title>LITEcrib · Easy test wallet</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #0b1429; color: #ecf2ff; font: 17px/1.6 system-ui, sans-serif; }
+        main { max-width: 760px; margin: 35px auto; padding: 24px; }
+        section { background: #142448; border: 1px solid #375789; border-radius: 18px; padding: 24px; margin: 20px 0; }
+        h1 { line-height: 1.15; } h2 { font-size: 1.35rem; }
+        a { color: #a7ccff; display: inline-block; margin: 8px; }
+        button, .button { display: inline-block; cursor: pointer; border: 1px solid #8fbaff; border-radius: 10px; background: #bed6ff; color: #0b1429; font: 600 16px/1.4 system-ui; padding: 12px 16px; margin: 6px 6px 6px 0; text-decoration: none; min-height: 48px; }
+        button.secondary { background: transparent; color: #dbe8ff; }
+        button:disabled { opacity: .55; cursor: wait; }
+        .badge { background: #294269; padding: 5px 12px; border-radius: 99px; font-size: 14px; }
+        .steps { padding-left: 25px; } .done { color: #92efbe; }
+        .address { overflow-wrap: anywhere; padding: 12px; background: #0b1429; border-radius: 8px; }
+        .balance { font-size: 1.4rem; overflow-wrap: anywhere; }
+        .hint { color: #b6c9e6; font-size: 14px; }
+        [role=alert] { color: #ffb9b9; overflow-wrap: anywhere; }
+        @media (max-width: 480px) { main { padding: 14px; margin: 12px auto; } section { padding: 16px; } }
+    </style>
+</head>
+<body>
+<main>
+    <a href="./">← Back to LITEcrib</a>
+    <h1>Your easy test wallet</h1>
+    <span class="badge">LiteForge · Chain 4441 · TESTNET</span>
+    <section id="wallet-root" aria-label="Wallet setup"><p role="status">Loading secure wallet sign-in…</p></section>
+    <p class="hint">This Google/Privy test wallet is separate from an existing LITEcrib email/password custody account. Connecting it does not migrate your existing wallet or game credits.</p>
+    <p><a href="https://docs.litvm.com/get-started-on-testnet/add-to-wallet" target="_blank" rel="noopener noreferrer">Official network guide ↗</a></p>
+    <noscript>Enable JavaScript to set up your wallet.</noscript>
+</main>
+<script type="module">
+    import('./wallet-assets/wallet.js').catch(() => {
+        const root = document.getElementById('wallet-root');
+        root.textContent = 'Wallet sign-in could not load. Please reload shortly. You can still return to the game.';
+        root.setAttribute('role', 'alert');
+    });
+</script>
+</body>
+</html>

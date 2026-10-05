@@ -1,0 +1,23 @@
+name: Build wallet UI on GitHub
+on:
+  push:
+    branches: [gh-pages]
+    paths: ['wallet-ui/**', '.github/workflows/wallet-build.yml']
+  workflow_dispatch:
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --package-lock=false
+        working-directory: wallet-ui
+      - run: npm run build
+        working-directory: wallet-ui
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wallet-assets
+          path: wallet-assets/

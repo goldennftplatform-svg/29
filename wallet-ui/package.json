@@ -1,0 +1,15 @@
+{
+  "name": "litecrib-wallet-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src.jsx --bundle --splitting --format=esm --minify --outdir=../wallet-assets --entry-names=wallet --define:process.env.NODE_ENV=\"\\\"production\\\"\""
+  },
+  "dependencies": {
+    "@privy-io/react-auth": "3.47.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "viem": "2.38.5"
+  },
+  "devDependencies": { "esbuild": "0.25.10" }
+}
