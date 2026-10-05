@@ -20,14 +20,19 @@ const artifact = {
 const chain = defineChain({ id: 4441, name: 'CI', nativeCurrency: { name: 'Test', symbol: 'TEST', decimals: 18 }, rpcUrls: { default: { http: [] } } });
 const provider = ganache.provider({ chain: { chainId: 4441 }, logging: { quiet: true } });
 try {
+    const reportedChainId = Number(await provider.request({ method: 'eth_chainId', params: [] }));
+    assert.equal(reportedChainId, 4441, 'ganache must report chain ID 4441 for the LiteForge guard');
     const p = createPublicClient({ chain, transport: custom(provider), cacheTime: 0 });
     const w = createWalletClient({ chain, transport: custom(provider) });
-    const [alice, bob] = await w.getAddresses();
+    const [alice, bob] = await w.getAccounts();
+    console.log('test accounts', alice, bob);
     const tx = await w.deployContract({ account: alice, abi: artifact.abi, bytecode: artifact.bytecode });
     const receipt = await p.waitForTransactionReceipt({ hash: tx });
-    assert.equal(receipt.status, 'success');
+    if (receipt.status !== 'success') throw new Error('deployment reverted at nonce ' + receipt.nonce);
     const address = receipt.contractAddress;
-    assert.equal(await p.getCode({ address }), artifact.runtime);
+    assert.ok(address, 'deployment produced no contract address');
+    const onChainCode = await p.getCode({ address });
+    assert.equal(onChainCode, artifact.runtime, 'deployed runtime bytecode must match the compiled artifact');
     const entry = 1000000000000000n;
     const write = async (account, functionName, value = 0n) => {
         const { request } = await p.simulateContract({ address, abi: artifact.abi, functionName, account, value });
@@ -54,8 +59,8 @@ try {
 } finally { await provider.disconnect(); }
 const wrongProvider = ganache.provider({ chain: { chainId: 1 }, logging: { quiet: true } });
 try {
-    const p = createPublicClient({ transport: custom(wrongProvider) });
-    const [account] = await wrongProvider.request({ method: 'eth_accounts', params: [] });
+    const p = createPublicClient({ transport: custom(wrongProvider), cacheTime: 0 });
+    const [account] = (await wrongProvider.request({ method: 'eth_accounts', params: [] }));
     await assert.rejects(() => p.estimateGas({ account, data: artifact.bytecode }));
     console.log('PASS: cannot deploy on Ethereum mainnet chain ID');
 } finally { await wrongProvider.disconnect(); }
