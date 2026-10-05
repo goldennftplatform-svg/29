@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "contract": "node contract-build.mjs",
     "build": "esbuild src.jsx --bundle --splitting --format=esm --minify --outdir=../wallet-assets --entry-names=wallet --define:process.env.NODE_ENV=\"\\\"production\\\"\""
   },
   "dependencies": {
@@ -11,5 +12,5 @@
     "react-dom": "18.3.1",
     "viem": "2.38.5"
   },
-  "devDependencies": { "esbuild": "0.25.10" }
+  "devDependencies": { "esbuild": "0.25.10", "solc": "0.8.30", "ganache": "7.9.2" }
 }

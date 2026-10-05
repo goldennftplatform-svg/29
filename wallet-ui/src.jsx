@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { PrivyProvider, usePrivy, useWallets, useCreateWallet } from '@privy-io/react-auth';
-import { defineChain, createPublicClient, http, formatEther } from 'viem';
+import { PrivyProvider, usePrivy, useWallets, useCreateWallet, useSendTransaction } from '@privy-io/react-auth';
+import { defineChain, createPublicClient, http, formatEther, encodeFunctionData } from 'viem';
 
 const chain = defineChain({
     id: 4441,
@@ -12,6 +12,9 @@ const chain = defineChain({
     testnet: true
 });
 const client = createPublicClient({ chain, transport: http(undefined, { timeout: 15000, retryCount: 1 }) });
+
+const ENTRY_WEI = 1000000000000000n;
+const ENTRY_HEX = '0xde0b6b3a7640000'; // 0.001 zkLTC — Privy expects a hex Quantity.
 
 class Boundary extends React.Component {
     state = { failed: false };
@@ -27,6 +30,7 @@ function Wallet() {
     const { ready, authenticated, login, logout, user } = usePrivy();
     const { wallets, ready: walletsReady } = useWallets();
     const { createWallet } = useCreateWallet();
+    const { sendTransaction } = useSendTransaction();
     const wallet = wallets.find(w => w.walletClientType === 'privy');
     const address = wallet?.address;
     const [balance, setBalance] = useState(null);
@@ -36,6 +40,83 @@ function Wallet() {
     const [refresh, setRefresh] = useState(0);
     const [loadingBalance, setLoadingBalance] = useState(false);
     const [slow, setSlow] = useState(false);
+    const [deployment, setDeployment] = useState(null);
+    const [artifact, setArtifact] = useState(null);
+    const [deposit, setDeposit] = useState(null);
+    const [transaction, setTransaction] = useState(null);
+    const [confirmedDeposit, setConfirmedDeposit] = useState(null);
+    const [deployedAddress, setDeployedAddress] = useState(null);
+    const deployMode = new URLSearchParams(location.search).get('deploy') === '1';
+
+    useEffect(() => {
+        Promise.all([
+            fetch('./practice-deployment.json', { cache: 'no-store' })
+                .then(r => { if (!r.ok) throw new Error('Deployment settings unavailable'); return r.json(); }),
+            fetch('./wallet-assets/practice-contract.json')
+                .then(r => { if (!r.ok) throw new Error('Contract artifact unavailable'); return r.json(); })
+        ]).then(([d, a]) => { setDeployment(d); setArtifact(a); })
+            // Not yet published by CI is an expected state, not a failure.
+            .catch(() => { setDeployment({ chainId: 4441, address: null }); setArtifact(null); });
+    }, []);
+
+    function isDepositReceipt(receipt) {
+        return receipt.status === 'success' && receipt.from.toLowerCase() === address.toLowerCase() &&
+            receipt.to?.toLowerCase() === deployment.address.toLowerCase() && receipt.logs.some(log =>
+                log.address.toLowerCase() === deployment.address.toLowerCase() && log.topics[0] === artifact.depositTopic &&
+                log.topics[1]?.slice(-40).toLowerCase() === address.slice(2).toLowerCase() && BigInt(log.data) === ENTRY_WEI);
+    }
+
+    useEffect(() => {
+        let active = true;
+        setDeposit(null); setConfirmedDeposit(null);
+        if (!address || !deployment?.address || !artifact) return () => { active = false; };
+        (async () => {
+            if (await client.getChainId() !== 4441) throw new Error('Wrong RPC network');
+            if (await client.getCode({ address: deployment.address }) !== artifact.runtime) throw new Error('Contract verification failed. Payments disabled.');
+            const value = await client.readContract({ address: deployment.address, abi: artifact.abi, functionName: 'deposits', args: [address] });
+            if (active) setDeposit(value);
+            const saved = localStorage.getItem('litecrib-practice-tx:' + address.toLowerCase());
+            if (saved && value > 0n) {
+                const receipt = await client.getTransactionReceipt({ hash: saved });
+                if (active && isDepositReceipt(receipt)) setConfirmedDeposit(saved);
+            }
+        })().catch(e => { if (active) setError(e.shortMessage || e.message); });
+        return () => { active = false; };
+    }, [address, deployment, artifact, refresh]);
+
+    async function transact(kind) {
+        if (!address || !wallet || !artifact) throw new Error('Wallet is not ready');
+        await wallet.switchChain(4441);
+        const provider = await wallet.getEthereumProvider();
+        if (Number(await provider.request({ method:'eth_chainId' })) !== 4441 || await client.getChainId() !== 4441) throw new Error('Switch to LiteForge before sending');
+        if (kind !== 'deploy') {
+            if (!deployment?.address || deployment.chainId !== 4441) throw new Error('Testnet contract not deployed yet');
+            if (await client.getCode({ address:deployment.address }) !== artifact.runtime) throw new Error('Contract verification failed');
+            await client.simulateContract({ address:deployment.address, abi:artifact.abi, functionName:kind, account:address, value:kind === 'deposit' ? 1000000000000000n : 0n });
+        }
+        const request = kind === 'deploy'
+            ? { data:artifact.bytecode, value:'0x0', chainId:4441 }
+            : { to:deployment.address, data:encodeFunctionData({ abi:artifact.abi, functionName:kind }), value:kind === 'deposit' ? ENTRY_HEX : '0x0', chainId:4441 };
+        const { hash } = await sendTransaction(request, { address, uiOptions:{ showWalletUIs:true } });
+        setTransaction(hash); setNotice('Transaction submitted. Waiting for chain confirmation…');
+        if (kind === 'deposit') localStorage.setItem('litecrib-practice-tx:' + address.toLowerCase(), hash);
+        const receipt = await client.waitForTransactionReceipt({ hash, timeout:120000 });
+        if (receipt.status !== 'success') throw new Error('Transaction reverted; no payment was credited.');
+        if (kind === 'deploy') {
+            if (await client.getCode({ address:receipt.contractAddress }) !== artifact.runtime) throw new Error('Deployed bytecode mismatch');
+            setDeployedAddress(receipt.contractAddress);
+            setNotice('Testnet contract deployed and bytecode verified. Publish this address in the deployment configuration.');
+        } else if (kind === 'deposit') {
+            if (!isDepositReceipt(receipt)) throw new Error('Receipt did not contain the expected deposit');
+            setConfirmedDeposit(hash);
+            setNotice('0.001 test zkLTC deposit confirmed. You can launch practice or refund now.');
+        } else {
+            localStorage.removeItem('litecrib-practice-tx:' + address.toLowerCase());
+            setConfirmedDeposit(null);
+            setNotice('Your test deposit was refunded. Network gas is not refunded.');
+        }
+        setRefresh(n => n+1);
+    }
 
     useEffect(() => {
         const timer = setTimeout(() => setSlow(true), 15000);
@@ -80,8 +161,8 @@ function Wallet() {
         {!authenticated ? <>
             <h2>A wallet without the setup headache</h2>
             <p>Sign in with Google or email. Privy creates an Ethereum-compatible wallet for LiteForge—no browser extension or Solana RPC needed.</p>
-            <button id="google-login" onClick={() => login({ loginMethods: ['google'] })}>Continue with Google</button>
-            <button className="secondary" onClick={() => login({ loginMethods: ['email'] })}>Use email instead</button>
+            <button id="email-login" onClick={() => login({ loginMethods: ['email'] })}>Continue with email</button>
+            <p className="hint">Google sign-in will be added after the email pilot.</p>
         </> : <>
             <p>Signed in{user?.google?.email || user?.email?.address ? ' as ' + (user.google?.email || user.email?.address) : ''}</p>
             {!walletsReady ? <p role="status">Loading your wallet…</p> : !wallet ? <>
@@ -91,6 +172,18 @@ function Wallet() {
                 <h2>Your LiteForge wallet</h2>
                 <p className="address" id="evm-address">{address}</p>
                 <div className="balance">{balance === null ? (loadingBalance ? 'Checking balance…' : 'Balance unavailable') : formatEther(balance) + ' test zkLTC'}</div>
+                <h3>Testnet practice game</h3>
+                <p>Deposit 0.001 test zkLTC, play against AI, then refund your deposit. No house fee, winnings, or real money. Transactions use a small amount of test gas.</p>
+                {!deployment?.address ? <p>Practice payments are awaiting contract deployment.</p> : <>
+                    <p>Refundable deposit: {deposit === null ? 'checking…' : formatEther(deposit) + ' test zkLTC'}</p>
+                    <button disabled={busy || deposit === null || deposit > 0n} onClick={() => action(() => transact('deposit'))}>Deposit 0.001 test zkLTC</button>
+                    <button className="secondary" disabled={busy || !deposit} onClick={() => action(() => transact('refund'))}>Refund my test deposit</button>
+                    {confirmedDeposit && deposit > 0n && <a className="button" href={'./?practiceTx=' + confirmedDeposit}>Play testnet practice</a>}
+                    <a href={chain.blockExplorers.default.url + '/address/' + deployment.address} target="_blank" rel="noopener noreferrer">Practice contract ↗</a>
+                </>}
+                {deployMode && !deployment?.address && <button disabled={busy || !artifact || !!deployedAddress} onClick={() => action(() => transact('deploy'))}>Deploy LiteForge practice contract</button>}
+                {deployedAddress && <p id="deployed-contract" className="address">{deployedAddress}</p>}
+                {transaction && <p><a id="latest-transaction" href={chain.blockExplorers.default.url + '/tx/' + transaction} target="_blank" rel="noopener noreferrer">View submitted transaction ↗</a></p>}
                 <div className="actions">
                     <button disabled={busy} onClick={() => action(async () => { await navigator.clipboard.writeText(address); setNotice('Address copied. Paste it into the faucet.'); })}>Copy address</button>
                     <button className="secondary" disabled={loadingBalance} onClick={() => setRefresh(n => n + 1)}>Refresh balance</button>

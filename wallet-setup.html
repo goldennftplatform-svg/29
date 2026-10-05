@@ -35,7 +35,7 @@
     <noscript>Enable JavaScript to set up your wallet.</noscript>
 </main>
 <script type="module">
-    import('./wallet-assets/wallet.js').catch(() => {
+    import('./wallet-assets/wallet.js?v=practice1').catch(() => {
         const root = document.getElementById('wallet-root');
         root.textContent = 'Wallet sign-in could not load. Please reload shortly. You can still return to the game.';
         root.setAttribute('role', 'alert');

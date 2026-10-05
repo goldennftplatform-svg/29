@@ -6,6 +6,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.game = game;
     setupEventListeners();
     await game.init();
+    if (new URLSearchParams(location.search).has('practiceTx')) {
+        const entry = document.createElement('script');
+        entry.src = 'practice-entry.js';
+        document.body.appendChild(entry);
+    }
 });
 
 function setupEventListeners() {
