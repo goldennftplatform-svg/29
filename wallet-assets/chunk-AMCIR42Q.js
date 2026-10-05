@@ -1,0 +1,1 @@
+import{L as t}from"./chunk-34PAQANK.js";import{b as r,g as s,h as i}from"./chunk-FMMPZDMN.js";import{b as e}from"./chunk-NMJRLO5Z.js";import{f as c}from"./chunk-PLGCP6SF.js";var o=c(e(),1);var p=({onClick:a,text:m})=>(0,o.jsxs)(s,{onClick:a,children:[(0,o.jsx)(i,{children:(0,o.jsx)(t,{})}),(0,o.jsx)(r,{children:m})]});export{p as a};
