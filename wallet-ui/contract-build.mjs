@@ -39,13 +39,19 @@ try {
         tx = await w.deployContract({ account: alice, abi: artifact.abi, bytecode: artifact.bytecode });
     } catch (e) {
         console.log('DEPLOY SEND FAILED:', e.shortMessage || e.message);
-        // Retry as an explicit legacy transaction.
-        const { data, gas } = await p.prepareTransactionRequest({ account: alice, data: artifact.bytecode, chain: chain });
-        console.log('legacy retry with gas', gas);
-        tx = await w.sendTransaction({ account: alice, data, gas, chain: chain, type: 'legacy' });
+        tx = undefined;
     }
-    const receipt = await p.waitForTransactionReceipt({ hash: tx });
-    if (receipt.status !== 'success') throw new Error('deployment reverted at nonce ' + receipt.nonce);
+    let receipt = tx ? await p.waitForTransactionReceipt({ hash: tx }) : null;
+    if (!receipt || receipt.status !== 'success') {
+        console.log('RAW RECEIPT', JSON.stringify(await provider.request({ method: 'eth_getTransactionReceipt', params: [tx] })));
+        console.log('creation code bytes', (artifact.bytecode.length - 2) / 2, 'runtime bytes', (artifact.runtime.length - 2) / 2);
+        console.log('retrying with explicit gas and legacy type');
+        const prepared = await p.prepareTransactionRequest({ account: alice, data: artifact.bytecode, chain: chain, gas: 3_000_000n });
+        const retryHash = await w.sendTransaction({ account: alice, chain: chain, data: prepared.data, gas: prepared.gas, type: 'legacy' });
+        receipt = await p.waitForTransactionReceipt({ hash: retryHash });
+        console.log('retry receipt status', receipt.status);
+    }
+    if (receipt.status !== 'success') throw new Error('deployment reverted');
     const address = receipt.contractAddress;
     assert.ok(address, 'deployment produced no contract address');
     const onChainCode = await p.getCode({ address });
