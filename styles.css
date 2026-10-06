@@ -112,6 +112,34 @@ header.pixel-header::after {
     background: repeating-linear-gradient(90deg, var(--lite-gold), var(--lite-gold) 8px, var(--lite-orange) 8px, var(--lite-orange) 16px);
 }
 
+/* Single, quiet door to the wallet/sign-in rails — deliberately NOT a card in
+   the lobby, so the landing screen stays a game menu. */
+.header-wallet-link {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    z-index: 2;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 8px;
+    line-height: 1;
+    color: var(--lite-white);
+    text-decoration: none;
+    padding: 8px 9px;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.header-wallet-link:hover,
+.header-wallet-link:focus-visible {
+    color: var(--lite-gold);
+    background: rgba(0, 0, 0, 0.35);
+    border-color: var(--lite-gold);
+}
+
+@media (max-width: 480px) {
+    .header-wallet-link { top: 8px; right: 8px; font-size: 7px; padding: 7px; }
+}
+
 .logo {
     display: flex;
     align-items: center;
