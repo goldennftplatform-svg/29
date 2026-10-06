@@ -2,7 +2,12 @@
 const { chromium, devices } = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const url = 'https://goldennftplatform-svg.github.io/29/';
+// The custom domain is the shipping target; the github.io origin stays covered
+// as a fallback so a broken CNAME cannot silently go unnoticed.
+const customDomain = process.env.PUBLIC_URL || 'https://29.aisp.live/';
+const fallbackOrigin = 'https://goldennftplatform-svg.github.io/29/';
+const url = process.env.PUBLIC_URL || fallbackOrigin;
+console.log(`Testing ${url}${url === customDomain ? ' (custom domain)' : ''}`);
 
 // A real 8x8 RGB PNG, built with zlib so CI never depends on a stored base64
 // blob that might not actually decode.

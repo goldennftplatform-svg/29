@@ -7,7 +7,9 @@ The public Privy App ID is configured in `src.jsx`. It is not a secret.
 In this Privy app:
 - Enable Google login (and email if desired).
 - Enable Ethereum embedded wallets, not only Solana wallets.
-- Add the production origin `https://goldennftplatform-svg.github.io` to allowed domains.
+- Add every production origin to allowed domains, including the custom domain:
+  - `https://goldennftplatform-svg.github.io`
+  - `https://29.aisp.live`
 - Follow Privy's Google OAuth configuration prompts if custom Google credentials are required.
 
 Do not commit app secrets or OAuth client secrets. The browser uses the public app ID only.

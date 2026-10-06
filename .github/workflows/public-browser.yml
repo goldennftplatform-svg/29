@@ -14,7 +14,23 @@ jobs:
           node-version: '22'
       - run: npm install --no-save --package-lock=false playwright
       - run: npx playwright install --with-deps chromium
+      # Both origins must serve the commit under test: a broken CNAME must not
+      # hide behind a healthy github.io fallback.
       - run: node tests/public-browser.cjs
+        env:
+          PUBLIC_URL: https://goldennftplatform-svg.github.io/29/
+      - run: node tests/public-browser.cjs
+        env:
+          PUBLIC_URL: https://29.aisp.live/
+      - name: Verify the custom domain serves the commit under test
+        run: |
+          served=$(curl -fsSL "https://29.aisp.live/game.js?revision=$GITHUB_SHA" | sha256sum | cut -d' ' -f1)
+          local=$(sha256sum game.js | cut -d' ' -f1)
+          if [ "$served" != "$local" ]; then
+            echo "::error::29.aisp.live is serving a different game.js than this commit"
+            exit 1
+          fi
+          echo "custom domain matches commit $GITHUB_SHA"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
