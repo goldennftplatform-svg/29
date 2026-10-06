@@ -373,5 +373,6 @@
     "hashOf": "0xb3168182",
     "house": "0xff9b3acf"
   },
-  "entryWei": "1000000000000000"
+  "entryWei": "1000000000000000",
+  "sourceCommit": "80f352fef66b82d3d2e23dff289dd68148e6a9fd"
 }
