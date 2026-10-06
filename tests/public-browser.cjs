@@ -63,17 +63,21 @@ function pngFixture() {
 (async () => {
     fs.mkdirSync('public-evidence', { recursive: true });
     // Wait for Pages to publish the revision under test, rather than test stale JS.
-    const expected = fs.readFileSync('game.js', 'utf8').replace(/\r\n/g, '\n');
+    // Pages deploys the whole commit atomically, but WHICH files differ changes
+    // per commit: gating on game.js alone let a ?v= bump in index.html run the
+    // browser against the previous deployment. Every file the page loads must land.
+    const watch = ['index.html', 'game.js', 'config.js', 'network.js', 'wallet.js'];
+    const expected = new Map(watch.map(f => [f, fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n')]));
     let published = false;
     for (let i = 0; i < 60; i++) {
-        const response = await fetch(url + 'game.js?revision=' + process.env.GITHUB_SHA + '&attempt=' + i);
-        if (response.ok && (await response.text()).replace(/\r\n/g, '\n') === expected) {
-            published = true;
-            break;
-        }
+        const checks = await Promise.all([...expected].map(async ([file, want]) => {
+            const response = await fetch(url + file + '?revision=' + process.env.GITHUB_SHA + '&attempt=' + i);
+            return response.ok && (await response.text()).replace(/\r\n/g, '\n') === want;
+        }));
+        if (checks.every(Boolean)) { published = true; break; }
         await new Promise(resolve => setTimeout(resolve, 5000));
     }
-    assert.ok(published, 'Pages must serve the committed networking file');
+    assert.ok(published, 'Pages must serve the committed files: ' + watch.join(', '));
     const browser = await chromium.launch();
     try {
         for (const [label, options, mode, country] of [
@@ -134,7 +138,11 @@ function pngFixture() {
                     for (const selector of ['#play-btn', '#go-btn', '#count-btn']) {
                         const button = page.locator(selector);
                         if (await button.isVisible() && await button.isEnabled()) {
-                            await button.click();
+                            // The centered action bar reflows as buttons appear and
+                            // disappear with each phase, so a strict stability wait
+                            // can spin the full 30s on a button that never settles.
+                            // Visibility and enabled are already checked above.
+                            await button.click({ force: true });
                             if (selector === '#play-btn') played++;
                             if (selector === '#count-btn') counted++;
                             break;
