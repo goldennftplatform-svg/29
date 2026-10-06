@@ -2,12 +2,22 @@
 const { chromium, devices } = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-// The custom domain is the shipping target; the github.io origin stays covered
-// as a fallback so a broken CNAME cannot silently go unnoticed.
-const customDomain = process.env.PUBLIC_URL || 'https://29.aisp.live/';
+// CNAME is the single source of truth for the shipping domain, so this test,
+// the config.js staticHosts list and Pages cannot drift apart. The github.io
+// origin stays covered as a fallback so a broken CNAME cannot silently go
+// unnoticed — and when a CNAME is published it must actually redirect there.
+const cname = fs.existsSync('CNAME') ? fs.readFileSync('CNAME', 'utf8').trim() : '';
+const customDomain = cname ? `https://${cname}/` : null;
 const fallbackOrigin = 'https://goldennftplatform-svg.github.io/29/';
-const url = process.env.PUBLIC_URL || fallbackOrigin;
-console.log(`Testing ${url}${url === customDomain ? ' (custom domain)' : ''}`);
+const url = process.env.PUBLIC_URL || customDomain || fallbackOrigin;
+const leg = url === customDomain && cname ? ` (custom domain ${cname})` : ' (github.io)';
+console.log(`Testing ${url}${leg}`);
+// config.js is the list the browser actually executes. Fail here with a named
+// reason instead of five minutes later as an unexplained /api/ 404.
+if (cname) {
+    assert.equal(require('../config.js').isStaticHost(cname), true,
+        `config.js staticHosts must list the published CNAME ${cname}`);
+}
 
 // A real 8x8 RGB PNG, built with zlib so CI never depends on a stored base64
 // blob that might not actually decode.
@@ -80,6 +90,12 @@ function pngFixture() {
             page.on('response', r => { if (r.status() >= 400) httpErrors.push(r.status() + ' ' + r.url()); });
             try {
                 await page.goto(url + '?test=' + process.env.GITHUB_SHA, { waitUntil: 'networkidle' });
+                // With a CNAME published, github.io only ever hands off to the
+                // custom domain. Landing anywhere else means the CNAME is not
+                // actually in force, which a bare "/" probe would miss.
+                if (url === fallbackOrigin && cname) {
+                    assert.equal(new URL(page.url()).hostname, cname, 'github.io must redirect to the published custom domain');
+                }
                 await page.waitForFunction(() => window.game && window.game.network.connected);
                 await page.locator('#country-select').selectOption(country);
                 if (label === 'desktop') {

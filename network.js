@@ -116,12 +116,21 @@ function GameNetwork() {
     // -----------------------------------------------------------------------
     // Public API
     // -----------------------------------------------------------------------
+    // Static hosts are decided by config.js so this file and wallet.js can
+    // never disagree. Falls back to the old github.io check if a stale cached
+    // config.js predates the predicate.
+    function isStaticHost(hostname) {
+        var cfg = window.LITECRIB_CONFIG;
+        if (cfg && typeof cfg.isStaticHost === 'function') return cfg.isStaticHost(hostname);
+        return String(hostname || '').endsWith('.github.io');
+    }
+
     function connect() {
         state.playerId = localStorage.getItem(LS_PLAYER) || ('p_' + Math.random().toString(36).substr(2, 9));
         localStorage.setItem(LS_PLAYER, state.playerId);
 
         // Pages has no relay API. Do not delay browser play on an API probe.
-        if (window.location.hostname.endsWith('.github.io')) {
+        if (isStaticHost(window.location.hostname)) {
             state.mode = 'local';
             state.connected = true;
             listCache = readList();

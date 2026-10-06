@@ -33,13 +33,20 @@
         try { return localStorage.getItem(LS_PLAYER) || ''; } catch (e) { return ''; }
     }
 
-    // Static hosts (GitHub Pages) have no relay, so every /api/* call is a
-    // guaranteed 404/405. Detect once and skip the network entirely rather than
-    // logging failed requests the code promises never to make.
+    // Static hosts (GitHub Pages, the custom domain) have no relay, so every
+    // /api/* call is a guaranteed 404/405. Detect once and skip the network
+    // entirely rather than logging failed requests the code promises never to
+    // make. The host list lives in config.js, shared with network.js; the
+    // github.io fallback covers a stale cached config.js.
+    function isStaticHost(hostname) {
+        if (cfg && typeof cfg.isStaticHost === 'function') return cfg.isStaticHost(hostname);
+        return /(^|\.)github\.io$/.test(String(hostname || ''));
+    }
+
     function relayAvailable() {
         var loc = window.location;
         if (loc.protocol === 'file:') return false;
-        return !/(^|\.)github\.io$/.test(loc.hostname);
+        return !isStaticHost(loc.hostname);
     }
 
     function getToken() {

@@ -28,6 +28,23 @@
         network = process.env.LTC_NETWORK;
     }
 
+    // Hosts that serve this bundle but have no relay API behind them, so every
+    // /api/* call there is a guaranteed 404/405. Kept in ONE place: network.js
+    // and wallet.js both ask this predicate instead of each guessing, which is
+    // how a published custom domain ended up probing /api/health on CI.
+    // Matching is exact-or-subdomain, so www.29.aisp.live is covered too.
+    var staticHosts = ['github.io', '29.aisp.live'];
+
+    function isStaticHost(hostname) {
+        var host = String(hostname == null ? '' : hostname).toLowerCase().replace(/\.+$/, '');
+        if (!host) return false;
+        for (var i = 0; i < staticHosts.length; i++) {
+            var suffix = String(staticHosts[i]).toLowerCase();
+            if (host === suffix || host.endsWith('.' + suffix)) return true;
+        }
+        return false;
+    }
+
     var cfg = {
         brand: 'LITEcrib',
         network: network,
@@ -37,6 +54,8 @@
         },
         indexerBase: baseIndexerFor(network),
         baseIndexerFor: baseIndexerFor,
+        staticHosts: staticHosts,
+        isStaticHost: isStaticHost,
         version: '1.2.0'
     };
 
@@ -54,6 +73,8 @@
             version: cfg.version,
             features: cfg.features,
             indexerBase: cfg.indexerBase,
+            staticHosts: staticHosts.slice(),
+            isStaticHost: isStaticHost,
             litvm: {
                 chainId: Number((typeof process !== 'undefined' && process.env && process.env.LITVM_CHAIN_ID) || 4441),
                 rpcUrl: (typeof process !== 'undefined' && process.env && process.env.LITVM_RPC_URL) || 'https://liteforge.rpc.caldera.xyz/http',
