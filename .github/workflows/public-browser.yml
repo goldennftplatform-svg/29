@@ -19,18 +19,22 @@ jobs:
       - run: node tests/public-browser.cjs
         env:
           PUBLIC_URL: https://goldennftplatform-svg.github.io/29/
-      - run: node tests/public-browser.cjs
-        env:
-          PUBLIC_URL: https://29.aisp.live/
-      - name: Verify the custom domain serves the commit under test
+      # The custom domain is only valid when a CNAME is actually published.
+      # Without one, a bare forwarder 404s every subpath while "/" still
+      # redirects — exactly the partial break CI caught on 2026-10-06.
+      - name: Test the custom domain (only when published)
+        if: hashFiles('CNAME') != ''
         run: |
-          served=$(curl -fsSL "https://29.aisp.live/game.js?revision=$GITHUB_SHA" | sha256sum | cut -d' ' -f1)
+          domain=$(tr -d '[:space:]' < CNAME)
+          echo "Testing https://${domain}/"
+          PUBLIC_URL="https://${domain}/" node tests/public-browser.cjs
+          served=$(curl -fsSL "https://${domain}/game.js?revision=$GITHUB_SHA" | sha256sum | cut -d' ' -f1)
           local=$(sha256sum game.js | cut -d' ' -f1)
           if [ "$served" != "$local" ]; then
-            echo "::error::29.aisp.live is serving a different game.js than this commit"
+            echo "::error::${domain} is serving a different game.js than this commit"
             exit 1
           fi
-          echo "custom domain matches commit $GITHUB_SHA"
+          echo "custom domain ${domain} matches commit $GITHUB_SHA"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
