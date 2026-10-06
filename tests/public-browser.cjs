@@ -101,6 +101,11 @@ function pngFixture() {
                     assert.equal(new URL(page.url()).hostname, cname, 'github.io must redirect to the published custom domain');
                 }
                 await page.waitForFunction(() => window.game && window.game.network.connected);
+                // No relay here: the relay-only deposit/SSO panel must stay shut
+                // (it used to open and 404 on every field) and the player is
+                // pointed at LiteForge onboarding instead.
+                assert.equal(await page.locator('#wallet-panel').isVisible(), false, 'Relay wallet panel stays hidden without a relay');
+                assert.equal(await page.locator('a[href="wallet-setup.html"]').isVisible(), true, 'Testnet wallet setup CTA is offered');
                 await page.locator('#country-select').selectOption(country);
                 if (label === 'desktop') {
                     // Real PNG fixture exercises upload/resize/storage; not a generated PFP.
