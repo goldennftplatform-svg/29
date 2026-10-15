@@ -93,14 +93,17 @@ function pngFixture() {
             page.on('pageerror', error => errors.push(error.message));
             page.on('response', r => { if (r.status() >= 400) httpErrors.push(r.status() + ' ' + r.url()); });
             try {
-                await page.goto(url + '?test=' + process.env.GITHUB_SHA, { waitUntil: 'networkidle' });
+                // SSE remains open for the lifetime of the lobby, so networkidle
+                // is not a usable readiness signal for multiplayer.
+                await page.goto(url + '?test=' + process.env.GITHUB_SHA, { waitUntil: 'domcontentloaded' });
                 // With a CNAME published, github.io only ever hands off to the
                 // custom domain. Landing anywhere else means the CNAME is not
                 // actually in force, which a bare "/" probe would miss.
                 if (url === fallbackOrigin && cname) {
                     assert.equal(new URL(page.url()).hostname, cname, 'github.io must redirect to the published custom domain');
                 }
-                await page.waitForFunction(() => window.game && window.game.network.connected);
+                await page.waitForFunction(() => window.game && window.game.network.connected, null, { timeout: 90000 });
+                assert.equal(await page.evaluate(() => game.network.getConnectionStatus().mode), 'relay', 'Published frontend connects to the shared multiplayer relay');
                 // No relay here: the relay-only deposit/SSO panel must stay shut
                 // (it used to open and 404 on every field) and the player is
                 // pointed at LiteForge onboarding instead.

@@ -6,7 +6,8 @@
     "scripts": {
         "start": "node server.js",
         "dev": "node server.js",
-"test":  "node tests/public-browser.cjs && node tests/wallet-e2e.cjs && node tests/wallet-psbt.cjs && node tests/sso-e2e.cjs && node tests/credits-e2e.cjs"
+"test":  "node tests/public-browser.cjs && node tests/multiplayer-e2e.cjs && node tests/wallet-e2e.cjs && node tests/wallet-psbt.cjs && node tests/sso-e2e.cjs && node tests/credits-e2e.cjs",
+        "test:multiplayer": "node tests/multiplayer-e2e.cjs"
     },
     "dependencies": {
         "bip32": "^4.0.0",

@@ -33,7 +33,9 @@ function setupEventListeners() {
         
         // Default to 1v1 for AI play, but use selected mode if available
         const mode = document.querySelector('.mode-card.selected')?.dataset.mode || '1v1';
-        game.createTable(mode);
+        game.isSinglePlayer = true;
+        game.aiPlayers.clear();
+        game.setupLocalGame(mode, name);
     });
 
     // Create table button (on landing)

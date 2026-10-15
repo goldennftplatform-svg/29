@@ -47,6 +47,7 @@
 
     var cfg = {
         brand: 'LITEcrib',
+        relayUrl: 'https://litecribb.onrender.com', // Shared multiplayer relay for the Pages frontend.
         network: network,
         features: {
             paymentsEnabled: true,   // LTC deposit panel in the lobby
@@ -69,6 +70,7 @@
     cfg.public = function () {
         return {
             brand: cfg.brand,
+            relayUrl: cfg.relayUrl,
             network: cfg.network,
             version: cfg.version,
             features: cfg.features,

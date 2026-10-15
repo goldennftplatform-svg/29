@@ -15,10 +15,10 @@
  *     - HTTP POST          POST /api/tables/...  (create/join/leave/state/chat)
  *       client -> server. The relay is the single source of truth.
  *
- *   LOCAL - fallback. If no relay is reachable (static GitHub Pages or
- *   file://), it falls back to the old localStorage + `storage`-event
- *   simulation. Table sync then only works across tabs of the SAME browser -
- *   the honest limitation, and the lobby banner says so.
+ *   LOCAL - solo fallback. If no relay is reachable (static GitHub Pages or
+ *   file://), AI play remains available, but human table creation is refused
+ *   with an explicit explanation. Set config.js relayUrl to the shared relay
+ *   origin to enable cross-device play from a static host.
  *
  * Public API (identical to the previous localStorage-only client):
  *   connect() -> Promise<{playerId}>
@@ -126,22 +126,25 @@ function GameNetwork() {
     }
 
     function connect() {
-        state.playerId = localStorage.getItem(LS_PLAYER) || ('p_' + Math.random().toString(36).substr(2, 9));
-        localStorage.setItem(LS_PLAYER, state.playerId);
+        state.serverUrl = isStaticHost(window.location.hostname)
+            ? ((window.LITECRIB_CONFIG || {}).relayUrl || '').replace(/\/+$/, '') || null
+            : null;
+        state.playerId = sessionStorage.getItem(LS_PLAYER) || ('p_' + Math.random().toString(36).substr(2, 9));
+        sessionStorage.setItem(LS_PLAYER, state.playerId);
 
         // Pages has no relay API. Do not delay browser play on an API probe.
-        if (isStaticHost(window.location.hostname)) {
+        if (!state.serverUrl && isStaticHost(window.location.hostname)) {
             state.mode = 'local';
             state.connected = true;
-            listCache = readList();
-            window.addEventListener('storage', onStorage);
+            listCache = [];
             emit('connected', { playerId: state.playerId, mode: 'local' });
             emit('tableList', listCache);
             return Promise.resolve({ playerId: state.playerId, mode: state.mode });
         }
         var rel = null;
-        return fetch(serverUrl() + '/api/health', { method: 'GET' })
-            .then(function (r) { rel = r.ok; })
+        return fetch(serverUrl() + '/api/health', { method: 'GET', signal: AbortSignal.timeout(60000) })
+            .then(function (r) { if (!r.ok) throw new Error('Relay unavailable'); return r.json(); })
+            .then(function (health) { rel = health.multiplayerProtocol === 1; })
             .catch(function () { rel = false; })
             .then(function () {
                 if (rel) {
@@ -150,8 +153,7 @@ function GameNetwork() {
                 } else {
                     state.mode = 'local';
                     state.connected = true;
-                    listCache = readList();
-                    window.addEventListener('storage', onStorage);
+                    listCache = [];
                     emit('connected', { playerId: state.playerId, mode: 'local' });
                     emit('tableList', listCache);
                 }
@@ -175,48 +177,29 @@ function GameNetwork() {
     function createTable(mode, name) {
         if (state.mode === 'relay') {
             return post('/api/tables', { mode: mode, name: name, playerId: state.playerId }).then(function (res) {
-                if (res.ok && res.tableId) { state.tableId = res.tableId; }
+                if ((res.ok || res.success) && res.tableId) {
+                    state.tableId = res.tableId;
+                    listCache = listCache.filter(function (t) { return t.id !== res.tableId; }).concat([res.table]);
+                    emit('tableList', listCache);
+                    connectRelay();
+                }
                 return res;
             });
         }
-        var table = {
-            id: 't_' + Date.now().toString(36),
-            mode: mode,
-            name: name || 'Table',
-            players: [{ id: state.playerId, name: name || 'Player', ready: true }],
-            state: null,
-            chat: []
-        };
-        var list = readList();
-        list.push(table);
-        writeList(list);
-        localBroadcast();
-        emit('tableList', list);
-        state.tableId = table.id;
-        return Promise.resolve({ ok: true, tableId: table.id, table: table });
+        return Promise.resolve({ success: false, error: 'Human tables need a live multiplayer relay. This site is in solo mode. Open the game on the shared relay server to host or join a human table.' });
     }
 
     function joinTable(tableId, name) {
         if (state.mode === 'relay') {
             return post('/api/tables/' + tableId + '/join', { playerId: state.playerId, name: name || state.playerName }).then(function (res) {
-                if (res.ok || res.success) state.tableId = tableId;
+                if (res.ok || res.success) {
+                    state.tableId = tableId;
+                    connectRelay();
+                }
                 return res;
             });
         }
-        var list = readList();
-        var found = null;
-        for (var i = 0; i < list.length; i++) {
-            if (list[i].id === tableId) { found = list[i]; break; }
-        }
-        if (!found) return Promise.resolve({ ok: false, error: 'not found' });
-        var exists = found.players.some(function (p) { return p.id === state.playerId; });
-        if (!exists) found.players.push({ id: state.playerId, name: name || state.playerName, ready: false });
-        writeList(list);
-        localBroadcast();
-        emit('tableList', list);
-        emit('state', found.state);
-        state.tableId = tableId;
-        return Promise.resolve({ ok: true, table: found });
+        return Promise.resolve({ success: false, error: 'Connect to the multiplayer relay to join a human table.' });
     }
 
     function leaveTable() {
@@ -259,7 +242,10 @@ function GameNetwork() {
     }
 
     function sendGameAction(action, payload) {
-        return broadcastState({ __action: action, __payload: payload || {}, playerId: state.playerId });
+        return post('/api/tables/' + state.tableId + '/action', { action: action, payload: payload || {}, playerId: state.playerId }).then(function (res) {
+            if (res.success && res.state) { stateCache = res.state; emit('state', res.state); }
+            return res;
+        });
     }
 
     function sendChat(message) {

@@ -105,7 +105,8 @@ class CribbageGame {
                             <div class="player-dot ${i < playerCount ? 'filled' : ''} ${isCurrentPlayer && table.players[i]?.id === this.network.playerId ? 'current' : ''}"></div>
                         `).join('')}
                     </div>
-                    ${isFull ? '<div class="table-full">FULL</div>' : ''}
+                    <div>${isCurrentPlayer ? 'YOUR TABLE · ' : ''}${playerCount}/${maxPlayers} SEATED</div>
+                    ${!isFull ? '<div>' + (isCurrentPlayer ? 'WAITING FOR OPPONENT' : 'CLICK TO SIT') + '</div>' : '<div class="table-full">FULL</div>'}
                 </div>
             `;
         }).join('');
@@ -126,7 +127,7 @@ class CribbageGame {
         ]);
     }
 
-    createTable(mode) {
+    async createTable(mode) {
         const name = document.getElementById('player-name').value.trim().toUpperCase();
         if (!name) {
             this.showModal('ERROR', 'Enter your name first!', [{ text: 'OK', action: () => this.hideModal() }]);
@@ -135,17 +136,19 @@ class CribbageGame {
 
         this.savePlayerName(name);
         
-        // Check if we should add AI opponents (single player mode)
-        const addAI = mode === '1v1' || mode === '3player';
-        
-        this.isSinglePlayer = addAI;
-        if (addAI) {
-            // Create local game with AI
-            this.setupLocalGame(mode, name);
-        } else {
-            const result = this.network.createTable(mode, name);
-            this.joinGame(result.tableId);
+        const result = await this.network.createTable(mode, name);
+        if (!result.success && !result.ok) {
+            this.showModal('TABLE UNAVAILABLE', this.escapeHtml(result.error || 'Could not create table.'), [
+                { text: 'OK', action: () => this.hideModal() }
+            ]);
+            return;
         }
+        this.isSinglePlayer = false;
+        this.aiPlayers.clear();
+        this.tableId = result.tableId;
+        this.loadTables();
+        // Keep the host in the lobby with their published seat visible until
+        // the opponent joins. A playable server snapshot opens the game.
         this.hideModal();
     }
 
@@ -193,7 +196,7 @@ class CribbageGame {
         this.checkAITurn(state);
     }
 
-    joinTable(tableId) {
+    async joinTable(tableId) {
         const name = document.getElementById('player-name').value.trim().toUpperCase();
         if (!name) {
             this.showModal('ERROR', 'Enter your name first!', [{ text: 'OK', action: () => this.hideModal() }]);
@@ -201,11 +204,13 @@ class CribbageGame {
         }
 
         this.savePlayerName(name);
-        const result = this.network.joinTable(tableId, name);
-        if (result.success) {
+        this.isSinglePlayer = false;
+        this.aiPlayers.clear();
+        const result = await this.network.joinTable(tableId, name);
+        if (result.success || result.ok) {
             this.joinGame(tableId);
         } else {
-            this.showModal('ERROR', result.error, [{ text: 'OK', action: () => this.hideModal() }]);
+            this.showModal('ERROR', this.escapeHtml(result.error || 'Could not join table.'), [{ text: 'OK', action: () => this.hideModal() }]);
         }
     }
 
@@ -217,14 +222,23 @@ class CribbageGame {
         document.getElementById('table-id-display').textContent = `TABLE #${tableId.slice(-5).toUpperCase()}`;
         
         const tableState = this.network.getTableState();
-        if (tableState?.state) {
-            this.handleStateUpdate(tableState.state);
+        if (tableState?.players) {
+            this.handleStateUpdate(tableState);
         }
         
         this.addLogEntry('Joined the table!', 'system');
     }
 
     handleStateUpdate(state) {
+        if (!state || !Array.isArray(state.players) || this.isSinglePlayer) return;
+        this.engine.players = state.players;
+        this.engine.playerCount = this.network.getTableList().find(t => t.id === this.network.tableId)?.mode === '3player' ? 3 : 2;
+        if (state.phase !== 'WAITING') {
+            this.tableId = this.network.tableId;
+            document.getElementById('landing-screen').classList.remove('active');
+            document.getElementById('game-screen').classList.add('active');
+            document.getElementById('table-id-display').textContent = `TABLE #${this.tableId.slice(-5).toUpperCase()}`;
+        }
         // Find our player index
         const playerIdx = state.players.findIndex(p => p.id === this.network.playerId);
         if (playerIdx !== -1) {
@@ -237,7 +251,8 @@ class CribbageGame {
         this.engine.dealerIndex = state.dealerIndex;
         this.engine.currentPlayerIndex = state.currentPlayer;
         this.engine.scores = state.scores;
-        this.engine.pegs = state.pegs;
+        this.engine.pegs = state.players.map(p => p.pegs || [0, 0]);
+        this.engine.roundStartScores = state.roundStart || state.scores;
         this.engine.crib = (state.crib || []).map(s => Card.fromString(s));
         this.engine.starter = state.starter ? Card.fromString(state.starter) : null;
         this.engine.playPile = (state.playPile || []).map(p => ({ card: Card.fromString(p.card), player: p.player }));
@@ -864,6 +879,11 @@ class CribbageGame {
 
     async discardToCrib() {
         const cardIndices = Array.from(this.discardSelection).sort((a, b) => b - a);
+        if (!this.isSinglePlayer) {
+            const result = await this.multiplayerAction('discard', { cardIndices });
+            if (result.success) { this.discardSelection.clear(); this.selectedCards.clear(); this.hideDiscardModal(); }
+            return;
+        }
         const result = this.engine.discardToCrib(this.localPlayerIndex, cardIndices);
         
         if (result.success) {
@@ -899,6 +919,7 @@ class CribbageGame {
     }
 
     async playCard(cardIndex) {
+        if (!this.isSinglePlayer) return this.multiplayerAction('play', { cardIndex });
         const handArr = this.engine.hands[this.localPlayerIndex] || [];
         const playedCard = handArr[cardIndex] ? handArr[cardIndex].toString() : '';
         const before = [...this.engine.scores];
@@ -937,6 +958,7 @@ class CribbageGame {
     }
 
     async sayGo() {
+        if (!this.isSinglePlayer) return this.multiplayerAction('go');
         const before = [...this.engine.scores];
         const result = this.engine.sayGo(this.localPlayerIndex);
         
@@ -953,6 +975,7 @@ class CribbageGame {
     }
 
     async countHand() {
+        if (!this.isSinglePlayer) return this.multiplayerAction('count');
         if (this.engine.phase === 'COUNT_HAND' || this.engine.phase === 'COUNT_CRIB') {
             const r = this.engine.proceedToNextCount();
             const state = this.engine.getState(this.localPlayerIndex);
@@ -979,6 +1002,14 @@ class CribbageGame {
         }
         
         this.broadcastState();
+    }
+
+    async multiplayerAction(action, payload) {
+        const result = await this.network.sendGameAction(action, payload);
+        if (!result.success) this.showModal('MOVE FAILED', this.escapeHtml(result.error || 'Connection lost.'), [
+            { text: 'OK', action: () => this.hideModal() }
+        ]);
+        return result;
     }
 
     broadcastState() {
@@ -1156,6 +1187,15 @@ checkAITurn(state) {
     updateConnectionStatus(connected) {
         const dot = document.getElementById('status-dot');
         const text = document.getElementById('status-text');
+        let notice = document.getElementById('multiplayer-status');
+        if (!notice) {
+            notice = document.createElement('p');
+            notice.id = 'multiplayer-status';
+            notice.setAttribute('role', 'status');
+            document.getElementById('tables-grid').before(notice);
+        }
+        const relay = this.network.getConnectionStatus().mode === 'relay';
+        notice.textContent = relay && connected ? 'ONLINE · Human tables are shared with everyone on this relay.' : 'SOLO MODE · Human tables require a connected multiplayer relay.';
         
         if (connected) {
             dot.classList.add('connected');

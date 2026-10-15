@@ -6,7 +6,7 @@ Old School 8-Bit Multiplayer Cribbage, powered by Litecoin (LTC) and built LitVM
 
 - **Multiplayer**: 1v1 Head-to-Head or 3-Player Trio
 - **Authentic Cribbage Rules**: Full scoring (15s, pairs, runs, flushes, nobs)
-- **Real-time Play**: SSE relay server (multiplayer relay) with localStorage fallback for static hosting
+- **Real-time Play**: SSE relay server with server-owned game state and separate hands for each human
 - **8-Bit Art Style**: Pixel-perfect retro aesthetic, Litecoin-tinted palette
 - **Cribbage Board**: Visual peg tracking with 121 holes
 - **Dealer Rotation**: Automatic dealer chip passing
@@ -56,9 +56,16 @@ brokers tables between devices over SSE + HTTP POST. Deploy it to any Node host
 node server.js            # serves the game + relay on PORT (default 8080)
 ```
 
-In the static fallback (GitHub Pages / Vercel) multiplayer uses `localStorage`
-keyed to the same origin — same-browser only. Point `network.js` at the relay URL
-for real cross-device play.
+The public frontend at **https://29.aisp.live** uses `config.js` → `relayUrl`
+to reach **https://litecribb.onrender.com**. This is a public URL, not a secret
+or a Render environment variable. The `29` repo's `gh-pages` branch publishes
+the frontend; the `LITEcrib` repo's `main` branch deploys the Render relay.
+When running `node server.js` locally, the game uses its own origin instead.
+
+`CREATE TABLE` publishes a human table; `PLAY VS AI` starts a separate solo game.
+Without a working relay, solo play remains available and human tables show an
+explicit connection message. `/api/health` must return JSON with
+`multiplayerProtocol: 1`; an HTML fallback is not a working relay health check.
 
 ## Deploying (Render)
 
@@ -86,8 +93,8 @@ you want secrets without exporting them).
 ## Git hosts
 
 - **Render / Railway / Fly** — the real relay (SSE). This is the multiplayer host.
-- **GitHub Pages / Vercel** — static-only fallback; multiplayer degrades to
-  same-browser localStorage; the wallet panel auto-hides.
+- **GitHub Pages / Vercel** — static frontend; human multiplayer uses the
+  configured Render relay. The relay-only wallet panel stays hidden.
 
 ## Accounts, SSO & custody wallets
 

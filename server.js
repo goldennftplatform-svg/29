@@ -33,6 +33,7 @@ const auth = require('./auth');
 const store = require('./store');
 const pricing = require('./pricing');
 const providers = require('./providers');
+const { CribbageEngine } = require('./cribbage-engine');
 
 const ADMIN = process.env.LITECRIB_ADMIN_TOKEN || '';
 
@@ -133,7 +134,8 @@ function broadcastState(table, state, sourcePlayerId) {
     // (idempotent snapshot semantics — the sender's own render already has it,
     // re-rendering the same object is a no-op visually).
     streams.forEach((s) => {
-        if (s.tableId === table.id) sendSse(s.res, 'state', { tableId: table.id, state });
+        const index = table.players.findIndex(p => p.id === s.playerId);
+        if (s.tableId === table.id && index !== -1) sendSse(s.res, 'state', { tableId: table.id, state: table.engine.getState(index) });
     });
 }
 
@@ -148,7 +150,8 @@ function broadcastTableJoin(table) {
     // handshake bookkeeping (kept identical to the "state" event shape).
     streams.forEach((s) => {
         if (s.tableId === table.id) {
-            sendSse(s.res, 'state', { tableId: table.id, state: table.lastState || {} });
+            const index = table.players.findIndex(p => p.id === s.playerId);
+            if (index !== -1) sendSse(s.res, 'state', { tableId: table.id, state: table.engine.getState(index) });
         }
     });
     broadcastTables(); // lobby rosters everywhere
@@ -157,17 +160,19 @@ function broadcastTableJoin(table) {
 // ---------------------------------------------------------------------------
 // Registry mutations
 // ---------------------------------------------------------------------------
-function createTable(mode, name) {
+function createTable(mode, name, playerId) {
     const id = 'table_' + (++tableSeq) + '_' + Date.now().toString(36);
     const table = {
         id,
         mode,
         created: Date.now(),
         players: [],
-        lastState: null
+        lastState: null,
+        engine: new CribbageEngine(mode === '1v1' ? 2 : 3)
     };
     if (name) {
-        table.players.push({ id: generateId('player'), name, ready: false });
+        table.players.push({ id: playerId, name, ready: true });
+        table.engine.addPlayer(name, playerId);
     }
     tables.set(id, table);
     broadcastTables();
@@ -178,13 +183,16 @@ function findTable(id) {
     return tables.get(id) || null;
 }
 
-function joinTable(table, playerName) {
+function joinTable(table, playerName, playerId) {
+    if (table.players.some(p => p.id === playerId)) return { success: true, playerId, table };
     const maxPlayers = table.mode === '1v1' ? 2 : 3;
     if (table.players.length >= maxPlayers) {
         return { success: false, error: 'Table full' };
     }
-    const player = { id: generateId('player'), name: playerName, ready: true };
+    const player = { id: playerId, name: playerName, ready: true };
     table.players.push(player);
+    table.engine.addPlayer(playerName, playerId);
+    if (table.players.length === maxPlayers) table.engine.startGame();
     broadcastTableJoin(table);
     return { success: true, playerId: player.id, table };
 }
@@ -319,7 +327,7 @@ const server = http.createServer((req, res) => {
 
     const corsHeaders = {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+        'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type,Authorization'
     };
     if (req.method === 'OPTIONS') {
@@ -350,13 +358,19 @@ const server = http.createServer((req, res) => {
         if (tableId) {
             const table = findTable(tableId);
             if (table) {
-                sendSse(res, 'state', { tableId, state: table.lastState || {} });
+                const index = table.players.findIndex(p => p.id === playerId);
+                if (index !== -1) sendSse(res, 'state', { tableId, state: table.engine.getState(index) });
                 const roster = tableToJson(table);
                 sendSse(res, 'roster', roster.players);
             }
         }
 
         req.on('close', () => unsubscribeStream(stream));
+        return;
+    }
+
+    if (p === '/api/health' && req.method === 'GET') {
+        sendJson(res, 200, { success: true, service: 'litecrib', multiplayerProtocol: 1 });
         return;
     }
 
@@ -368,18 +382,18 @@ const server = http.createServer((req, res) => {
 
     if (p === '/api/tables' && req.method === 'POST') {
         readBody(req).then((body) => {
-            if (!body || !body.mode) {
+            if (!body || !['1v1', '3player'].includes(body.mode) || !body.playerId || !body.name) {
                 sendJson(res, 400, { success: false, error: 'mode required' });
                 return;
             }
-            const table = createTable(body.mode, body.name);
+            const table = createTable(body.mode, body.name, body.playerId);
             sendJson(res, 200, { success: true, table: tableToJson(table), tableId: table.id });
         });
         return;
     }
 
     // ---- API: join/leave/state/chat per table ------------------------------------
-    const tableMatch = p.match(/^\/api\/tables\/([^/]+)\/(join|leave|state|chat)$/);
+    const tableMatch = p.match(/^\/api\/tables\/([^/]+)\/(join|leave|state|chat|action)$/);
     if (tableMatch) {
         const tableId = tableMatch[1];
         const op = tableMatch[2];
@@ -391,11 +405,11 @@ const server = http.createServer((req, res) => {
         readBody(req).then((body) => {
             switch (op) {
                 case 'join': {
-                    if (!body || !body.name) {
+                    if (!body || !body.name || !body.playerId) {
                         sendJson(res, 400, { success: false, error: 'name required' });
                         return;
                     }
-                    const result = joinTable(table, body.name);
+                    const result = joinTable(table, body.name, body.playerId);
                     if (result.success) {
                         sendJson(res, 200, { success: true, playerId: result.playerId, table: tableToJson(table), tableId });
                     } else {
@@ -409,13 +423,32 @@ const server = http.createServer((req, res) => {
                     return;
                 }
                 case 'state': {
-                    if (!body || !body.state) {
-                        sendJson(res, 400, { success: false, error: 'state required' });
-                        return;
+                    const index = table.players.findIndex(p => p.id === (body && body.playerId));
+                    if (index === -1) { sendJson(res, 403, { success: false, error: 'Take a seat first' }); return; }
+                    sendJson(res, 200, { success: true, ok: true, state: table.engine.getState(index) });
+                    return;
+                }
+                case 'action': {
+                    const index = table.players.findIndex(p => p.id === (body && body.playerId));
+                    if (index === -1) { sendJson(res, 403, { success: false, error: 'Take a seat first' }); return; }
+                    const engine = table.engine;
+                    const payload = body.payload || {};
+                    let result = { success: false, error: 'Invalid move' };
+                    if (body.action === 'discard' && Array.isArray(payload.cardIndices)) {
+                        const cards = payload.cardIndices;
+                        if (new Set(cards).size === cards.length && cards.every(i => Number.isInteger(i) && i >= 0 && i < engine.hands[index].length)) result = engine.discardToCrib(index, cards);
+                    } else if (body.action === 'play' && Number.isInteger(payload.cardIndex)) {
+                        result = engine.playCard(index, payload.cardIndex);
+                    } else if (body.action === 'go') {
+                        result = engine.sayGo(index);
+                    } else if (body.action === 'count' && ['COUNT_HAND', 'COUNT_CRIB'].includes(engine.phase) && index === engine.currentPlayerIndex) {
+                        engine.proceedToNextCount();
+                        result = { success: true };
                     }
-                    table.lastState = body.state;
-                    broadcastState(table, body.state, body.playerId);
-                    sendJson(res, 200, { success: true });
+                    if (!result.success) { sendJson(res, 400, { success: false, error: result.error || 'Invalid move' }); return; }
+                    if (engine.phase === 'STARTER') engine.startPlayPhase();
+                    broadcastState(table);
+                    sendJson(res, 200, { success: true, state: engine.getState(index) });
                     return;
                 }
                 case 'chat': {
