@@ -6,7 +6,7 @@
     panel.setAttribute('role','status'); panel.textContent = 'Verifying your LiteForge practice deposit…';
     document.querySelector('#landing-screen .pixel-border').prepend(panel);
     async function rpc(method, params=[]) {
-        const r = await fetch('https://liteforge.rpc.caldera.xyz/http', {
+        const r = await fetch('https://rpc.testnet.liteforge.zeeve.net/', {
             method:'POST', headers:{'Content-Type':'application/json'},
             body:JSON.stringify({jsonrpc:'2.0',id:1,method,params}), signal:AbortSignal.timeout(15000)
         });

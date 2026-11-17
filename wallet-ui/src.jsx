@@ -7,11 +7,20 @@ const chain = defineChain({
     id: 4441,
     name: 'LitVM LiteForge',
     nativeCurrency: { name: 'Test zkLTC', symbol: 'zkLTC', decimals: 18 },
-    rpcUrls: { default: { http: ['https://liteforge.rpc.caldera.xyz/http'] } },
-    blockExplorers: { default: { name: 'LiteForge Explorer', url: 'https://liteforge.explorer.caldera.xyz' } },
+    rpcUrls: { default: { http: ['https://rpc.testnet.liteforge.zeeve.net/'] } },
+    blockExplorers: { default: { name: 'LiteForge Explorer', url: 'https://explorer.testnet.liteforge.zeeve.net' } },
     testnet: true
 });
 const client = createPublicClient({ chain, transport: http(undefined, { timeout: 15000, retryCount: 1 }) });
+
+async function boundedRead(read) {
+    let timer;
+    try {
+        return await Promise.race([read(), new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error('LiteForge did not respond in time. Use Refresh balance to retry.')), 20000);
+        })]);
+    } finally { clearTimeout(timer); }
+}
 
 const ENTRY_WEI = 1000000000000000n; // 0.001 zkLTC — fallback only; prefer artifact.entryWei (built from contracts/PracticeDeposit.sol)
 function entryWeiFor(artifact) {
@@ -43,6 +52,9 @@ function Wallet() {
     const [busy, setBusy] = useState(false);
     const [refresh, setRefresh] = useState(0);
     const [loadingBalance, setLoadingBalance] = useState(false);
+    const [loadingDeposit, setLoadingDeposit] = useState(false);
+    const [balanceError, setBalanceError] = useState('');
+    const [depositError, setDepositError] = useState('');
     const [slow, setSlow] = useState(false);
     const [deployment, setDeployment] = useState(null);
     const [artifact, setArtifact] = useState(null);
@@ -72,19 +84,24 @@ function Wallet() {
 
     useEffect(() => {
         let active = true;
-        setDeposit(null); setConfirmedDeposit(null);
+        setDeposit(null); setConfirmedDeposit(null); setDepositError(''); setLoadingDeposit(false);
         if (!address || !deployment?.address || !artifact) return () => { active = false; };
-        (async () => {
+        setLoadingDeposit(true);
+        boundedRead(async () => {
             if (await client.getChainId() !== 4441) throw new Error('Wrong RPC network');
             if (await client.getCode({ address: deployment.address }) !== artifact.runtime) throw new Error('Contract verification failed. Payments disabled.');
-            const value = await client.readContract({ address: deployment.address, abi: artifact.abi, functionName: 'deposits', args: [address] });
-            if (active) setDeposit(value);
+            return client.readContract({ address: deployment.address, abi: artifact.abi, functionName: 'deposits', args: [address] });
+        }).then(async value => {
+            if (!active) return;
+            setDeposit(value);
+            setLoadingDeposit(false);
             const saved = localStorage.getItem('litecrib-practice-tx:' + address.toLowerCase());
             if (saved && value > 0n) {
-                const receipt = await client.getTransactionReceipt({ hash: saved });
+                const receipt = await boundedRead(() => client.getTransactionReceipt({ hash: saved }));
                 if (active && isDepositReceipt(receipt)) setConfirmedDeposit(saved);
             }
-        })().catch(e => { if (active) setError(e.shortMessage || e.message); });
+        }).catch(e => { if (active) setDepositError(e.shortMessage || e.message); })
+            .finally(() => { if (active) setLoadingDeposit(false); });
         return () => { active = false; };
     }, [address, deployment, artifact, refresh]);
 
@@ -132,15 +149,14 @@ function Wallet() {
 
     useEffect(() => {
         let active = true;
-        setBalance(null);
+        setBalance(null); setBalanceError(''); setLoadingBalance(false);
         if (!address) return () => { active = false; };
         setLoadingBalance(true);
-        setError('');
-        (async () => {
+        boundedRead(async () => {
             if (await client.getChainId() !== chain.id) throw new Error('RPC returned the wrong network. Balance was not loaded.');
-            const amount = await client.getBalance({ address });
-            if (active) setBalance(amount);
-        })().catch(e => { if (active) setError(e.shortMessage || e.message); })
+            return client.getBalance({ address });
+        }).then(amount => { if (active) setBalance(amount); })
+            .catch(e => { if (active) setBalanceError(e.shortMessage || e.message); })
             .finally(() => { if (active) setLoadingBalance(false); });
         return () => { active = false; };
     }, [address, refresh]);
@@ -182,7 +198,7 @@ function Wallet() {
                 <h3>Testnet practice game</h3>
                 <p>Deposit 0.001 test zkLTC, play against AI, then refund your deposit. No house fee, winnings, or real money. Transactions use a small amount of test gas.</p>
                 {!deployment?.address ? <p>Practice payments are awaiting contract deployment.</p> : <>
-                    <p>Refundable deposit: {deposit === null ? 'checking…' : formatEther(deposit) + ' test zkLTC'}</p>
+                    <p>Refundable deposit: {deposit === null ? (loadingDeposit ? 'checking…' : 'unavailable — refresh to retry') : formatEther(deposit) + ' test zkLTC'}</p>
                     <button disabled={busy || deposit === null || deposit > 0n} onClick={() => action(() => transact('deposit'))}>Deposit 0.001 test zkLTC</button>
                     <button className="secondary" disabled={busy || !deposit} onClick={() => action(() => transact('refund'))}>Refund my test deposit</button>
                     {confirmedDeposit && deposit > 0n && <a className="button" href={'./?practiceTx=' + confirmedDeposit}>Play testnet practice</a>}
@@ -193,12 +209,12 @@ function Wallet() {
                 {transaction && <p><a id="latest-transaction" href={chain.blockExplorers.default.url + '/tx/' + transaction} target="_blank" rel="noopener noreferrer">View submitted transaction ↗</a></p>}
                 <div className="actions">
                     <button disabled={busy} onClick={() => action(async () => { await navigator.clipboard.writeText(address); setNotice('Address copied. Paste it into the faucet.'); })}>Copy address</button>
-                    <button className="secondary" disabled={loadingBalance} onClick={() => setRefresh(n => n + 1)}>Refresh balance</button>
+                    <button className="secondary" disabled={loadingBalance || loadingDeposit} onClick={() => setRefresh(n => n + 1)}>Refresh balance</button>
                     <button className="secondary" disabled={busy} onClick={() => action(async () => { await wallet.switchChain(chain.id); setNotice('Wallet switched to LiteForge (4441).'); })}>Use LiteForge network</button>
                 </div>
                 <h3>Get free test coins</h3>
                 <p>Copy your address, open the official faucet, and complete its claim steps. Return here to see your balance refresh. Test coins have no cash value.</p>
-                <a className="button" href="https://liteforge.hub.caldera.xyz" target="_blank" rel="noopener noreferrer">Get test zkLTC ↗</a>
+                <a className="button" href="https://faucet.testnet.liteforge.zeeve.net/" target="_blank" rel="noopener noreferrer">Get test zkLTC ↗</a>
                 <a href={chain.blockExplorers.default.url + '/address/' + address} target="_blank" rel="noopener noreferrer">View balance & transactions ↗</a>
                 <p className="hint">Use this 0x address for LiteForge test zkLTC only. Native Litecoin and Solana use different networks. Test funds do not automatically become game credits.</p>
             </>}
@@ -206,6 +222,8 @@ function Wallet() {
         </>}
         {notice && <p role="status">{notice}</p>}
         {error && <p role="alert">{error}</p>}
+        {balanceError && <p role="alert">Balance check failed: {balanceError}</p>}
+        {depositError && <p role="alert">Deposit check failed: {depositError}</p>}
     </>;
 }
 
