@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="styles.css?v=20261006-nav">
     <link rel="stylesheet" href="safari-brand.css?v=country1">
     <link rel="stylesheet" href="app-layout.css?v=4">
+    <link rel="stylesheet" href="wallet-dropdown.css?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -26,7 +27,7 @@
                         <span class="logo-icon">⚡</span>
                     </div>
                     <p class="tagline">LITECOIN-POWERED 8-BIT CRIBBAGE</p>
-                    <a class="header-wallet-link" href="wallet-setup.html">WALLET</a>
+                    <button type="button" class="header-wallet-link" id="wallet-toggle" aria-expanded="false" aria-controls="wallet-menu">WALLET <span aria-hidden="true">▾</span></button>
                 </header>
                 
                 <div class="mode-selector">
@@ -90,7 +91,21 @@
                     <button class="pixel-btn" id="join-btn">JOIN LITEcrib</button>
                 </div>
 
-                <div class="wallet-panel" id="wallet-panel" hidden>
+                <div class="wallet-dropdown" id="wallet-menu" hidden>
+                    <div class="wallet-dropdown-head">
+                        <strong>TEST WALLET</strong>
+                        <span>LiteForge · 4441</span>
+                    </div>
+                    <section id="wallet-root" aria-label="LiteForge test wallet">
+                        <p role="status">Opening wallet…</p>
+                    </section>
+                    <p class="wallet-dropdown-hint">Email sign-in creates a test wallet on LiteForge. Test coins have no cash value and are separate from LITEcrib game credits.</p>
+                    <div class="wallet-dropdown-links">
+                        <a href="wallet-setup.html">FULL VIEW ↗</a>
+                        <a href="https://docs.litvm.com/get-started-on-testnet/add-to-wallet" target="_blank" rel="noopener noreferrer">NETWORK GUIDE ↗</a>
+                    </div>
+                    <div class="wallet-dropdown-divider">LITECRIB CUSTODY WALLET</div>
+                    <div class="wallet-panel" id="wallet-panel" hidden>
                     <div class="wallet-header">
                         <h2>LITECOIN WALLET</h2>
                         <span class="wallet-net" id="wallet-net">TESTNET</span>
@@ -132,6 +147,7 @@
                                 <button class="pixel-btn secondary sso-export" id="sso-export">EXPORT SEED</button>
                             </div>
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>
@@ -283,5 +299,41 @@
     <script src="cribbage-engine.js?v=20260920-startup"></script>
     <script src="main.js?v=20261015-human-tables"></script>
     <script src="wallet.js?v=20261006-static"></script>
+    <script>
+        (function () {
+            var toggle = document.getElementById('wallet-toggle');
+            var menu = document.getElementById('wallet-menu');
+            if (!toggle || !menu) return;
+            var loaded = false;
+
+            function setOpen(open) {
+                menu.hidden = !open;
+                toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                if (!open || loaded) return;
+                loaded = true;
+                import('./wallet-assets/wallet.js?v=liteforge-zeeve-20261116').catch(function () {
+                    var root = document.getElementById('wallet-root');
+                    if (root) {
+                        root.textContent = 'Wallet sign-in could not load. Reload shortly, or use FULL VIEW.';
+                        root.setAttribute('role', 'alert');
+                    }
+                });
+            }
+
+            toggle.addEventListener('click', function (event) {
+                event.stopPropagation();
+                setOpen(menu.hidden);
+            });
+            document.addEventListener('click', function (event) {
+                if (!menu.hidden && !menu.contains(event.target) && event.target !== toggle) setOpen(false);
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && !menu.hidden) {
+                    setOpen(false);
+                    toggle.focus();
+                }
+            });
+        })();
+    </script>
 </body>
 </html>

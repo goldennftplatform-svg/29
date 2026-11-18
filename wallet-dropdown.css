@@ -1,0 +1,95 @@
+/* Wallet as a header dropdown, not a separate page. */
+#landing-screen .pixel-header { overflow: visible; }
+#wallet-toggle { cursor: pointer; font-family: inherit; appearance: none; }
+#wallet-toggle span { display: inline-block; margin-left: 2px; transition: transform .15s ease; }
+#wallet-toggle[aria-expanded="true"] span { transform: rotate(180deg); }
+
+#wallet-menu {
+    position: absolute;
+    top: 58px;
+    right: 12px;
+    z-index: 30;
+    width: min(380px, calc(100% - 24px));
+    max-height: min(72vh, 640px);
+    overflow: auto;
+    padding: 14px;
+    border: 1px solid #3d5c86;
+    border-radius: 14px;
+    background: #0f1a2c;
+    box-shadow: 0 18px 48px #0009;
+    color: #eaf1ff;
+    font: 14px/1.5 system-ui, sans-serif;
+}
+#wallet-menu[hidden] { display: none !important; }
+#wallet-menu a { color: #a7ccff; }
+
+.wallet-dropdown-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+    font: 700 12px system-ui, sans-serif;
+    letter-spacing: .08em;
+}
+.wallet-dropdown-head span { color: #9fb6d4; font-weight: 400; letter-spacing: 0; }
+.wallet-dropdown-divider {
+    margin: 14px 0 8px;
+    padding-top: 10px;
+    border-top: 1px solid #375789;
+    color: #9fb6d4;
+    font: 700 10px system-ui, sans-serif;
+    letter-spacing: .1em;
+}
+.wallet-dropdown-hint { margin: 10px 0; color: #b6c9e6; font-size: 12px; }
+.wallet-dropdown-links { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; }
+
+/* Match the compact wallet page styles inside the dropdown. */
+#wallet-menu #wallet-root {
+    padding: 14px;
+    border: 1px solid #375789;
+    border-radius: 12px;
+    background: #142448;
+}
+#wallet-menu #wallet-root h2 { margin: 6px 0; font-size: 1.1rem; }
+#wallet-menu #wallet-root h3 { margin: 14px 0 4px; font-size: .95rem; }
+#wallet-menu #wallet-root p { margin: 6px 0; }
+#wallet-menu #wallet-root .steps { padding-left: 20px; margin: 0 0 10px; }
+#wallet-menu #wallet-root .done { color: #92efbe; }
+#wallet-menu #wallet-root .address {
+    overflow-wrap: anywhere;
+    padding: 10px;
+    background: #0b1429;
+    border-radius: 8px;
+    font-size: 12px;
+}
+#wallet-menu #wallet-root .balance { font-size: 1.2rem; overflow-wrap: anywhere; }
+#wallet-menu #wallet-root .hint { color: #b6c9e6; font-size: 12px; }
+#wallet-menu #wallet-root [role="alert"] { color: #ffb9b9; overflow-wrap: anywhere; }
+#wallet-menu #wallet-root button,
+#wallet-menu #wallet-root .button {
+    display: inline-block;
+    min-height: 44px;
+    margin: 6px 6px 6px 0;
+    padding: 10px 14px;
+    border: 1px solid #8fbaff;
+    border-radius: 9px;
+    background: #bed6ff;
+    color: #0b1429;
+    font: 600 14px/1.4 system-ui, sans-serif;
+    text-decoration: none;
+    cursor: pointer;
+}
+#wallet-menu #wallet-root button.secondary {
+    background: transparent;
+    color: #dbe8ff;
+    border-color: #5f7fae;
+}
+#wallet-menu #wallet-root button:disabled { opacity: .55; cursor: wait; }
+
+/* Keep the relay custody panel readable inside the dark dropdown. */
+#wallet-menu .wallet-panel { margin-top: 0; }
+
+@media (max-width: 480px) {
+    #wallet-menu { top: 52px; right: 8px; width: calc(100% - 16px); max-height: 76vh; padding: 12px; }
+}
