@@ -108,7 +108,13 @@ function pngFixture() {
                 // (it used to open and 404 on every field) and the player is
                 // pointed at LiteForge onboarding instead.
                 assert.equal(await page.locator('#wallet-panel').isVisible(), false, 'Relay wallet panel stays hidden without a relay');
-                assert.equal(await page.locator('a[href="wallet-setup.html"]').isVisible(), true, 'Testnet wallet setup CTA is offered');
+                // Wallet onboarding is now a header dropdown instead of a separate
+                // landing card; opening it must still expose the full-view link.
+                assert.equal(await page.locator('#wallet-toggle').isVisible(), true, 'Wallet dropdown toggle is offered');
+                await page.locator('#wallet-toggle').click();
+                assert.equal(await page.locator('#wallet-menu').isVisible(), true, 'Wallet dropdown opens from the main page');
+                assert.equal(await page.locator('#wallet-menu a[href="wallet-setup.html"]').isVisible(), true, 'Testnet wallet setup CTA is offered');
+                await page.locator('#wallet-toggle').click();
                 await page.locator('#country-select').selectOption(country);
                 if (label === 'desktop') {
                     // Real PNG fixture exercises upload/resize/storage; not a generated PFP.
