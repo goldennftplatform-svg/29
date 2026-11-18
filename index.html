@@ -11,6 +11,7 @@
     <title>LITEcrib - Litecoin Cribbage</title>
     <link rel="stylesheet" href="styles.css?v=20261006-nav">
     <link rel="stylesheet" href="safari-brand.css?v=country1">
+    <link rel="stylesheet" href="app-layout.css?v=4">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -152,13 +153,16 @@
 
                 <!-- Country outline score board -->
                 <div class="crib-board" id="crib-board">
-                    <div class="board-wrap">
-                        <svg class="peg-board country-track" id="board-track" viewBox="0 0 860 520" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Country-shaped cribbage score board"></svg>
-                    </div>
                     <div class="board-info">
                         <div class="player-score" id="player-scores"></div>
                     </div>
+                    <details class="board-details">
+                    <summary>Scoreboard map <span>Track the race to 121</span></summary>
+                    <div class="board-wrap">
+                        <svg class="peg-board country-track" id="board-track" viewBox="0 0 860 520" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Country-shaped cribbage score board"></svg>
+                    </div>
                     <p class="board-scroll-hint">Follow your colored lane to 121. Swipe the map on small screens.</p>
+                    </details>
                 </div>
 
                 <!-- Game Area -->
@@ -201,11 +205,11 @@
                             <div class="pd-title">PLAY PILE</div>
                             <div class="pd-pile-cards" id="pd-pile-cards"></div>
                         </div>
-                        <div class="pd-block pd-last-block">
-                            <div class="pd-title">LAST SCORE</div>
+                        <details class="pd-block pd-last-block">
+                            <summary>Scoring details</summary>
                             <div class="pd-last" id="pd-last">—</div>
                             <div class="pd-feed" id="pd-feed"></div>
-                        </div>
+                        </details>
                         <div class="pd-block pd-scores-block">
                             <div class="pd-title">SCORES</div>
                             <div class="pd-scores" id="pd-scores"></div>
@@ -239,10 +243,10 @@
                 </div>
 
                 <!-- Chat / Log -->
-                <div class="game-log" id="game-log">
-                    <div class="log-header">GAME LOG</div>
+                <details class="game-log" id="game-log">
+                    <summary class="log-header">Game activity</summary>
                     <div class="log-messages" id="log-messages"></div>
-                </div>
+                </details>
             </div>
         </div>
 

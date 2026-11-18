@@ -1,0 +1,84 @@
+/* Gameplay first: compact table, persistent score strip, optional detail. */
+#game-screen { color: #e8eef8; font-family: system-ui, sans-serif; }
+#game-screen > .pixel-border { background: #101b2b; border: 1px solid #31445b; border-radius: 18px; overflow: hidden; box-shadow: 0 16px 48px #0005; }
+#game-screen > .pixel-border::before { display: none; }
+#game-screen .game-header { padding: 10px 14px; background: #17263b; border: 0; gap: 8px; }
+#game-screen .table-info { min-width: 0; gap: 8px; }
+#game-screen .table-id { font: 700 12px system-ui; color: #e8eef8; }
+#game-screen .connection-status { font: 10px system-ui; }
+#game-screen .crib-board { margin: 8px; padding: 8px 12px; border-radius: 12px !important; border: 1px solid #31445b !important; }
+#game-screen .board-info { padding: 0; margin: 0; }
+#game-screen #player-scores { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 10px; }
+#game-screen .player-score-entry { flex-direction: row; font: 600 12px system-ui; gap: 6px; }
+#game-screen .player-score-entry .score { font: 800 20px system-ui; }
+#game-screen summary { cursor: pointer; font: 600 12px/1.4 system-ui; padding: 12px 2px; min-height: 44px; color: #b8cce4; }
+#game-screen summary:focus-visible, #game-screen button:focus-visible { outline: 3px solid #ffca46; outline-offset: 2px; }
+#game-screen summary span { float: right; font-weight: 400; color: #91a7c1; }
+#game-screen .board-details .board-wrap { margin: 0; }
+#game-screen .game-area { display: flex; flex-direction: column; justify-content: space-between; padding: 0 8px; gap: 8px; }
+#game-screen .opponents-area { min-height: 0; gap: 8px; }
+#game-screen .opponent-panel { flex: 1; display: flex; flex-direction: row; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px; padding: 7px 10px; border: 1px solid #31445b; border-radius: 10px; box-shadow: none; background: #17263b; }
+#game-screen .opponent-panel .seat-portrait { width: 24px; height: 24px; margin: 0; border-width: 1px; }
+#game-screen .opponent-name { font: 600 12px system-ui; color: #e8eef8; }
+#game-screen .opponent-cards, #game-screen .opponent-pegs, #game-screen .opponent-score { display: none; }
+#game-screen .opponent-panel.dealer::before { display: none; }
+#game-screen .center-area { flex: 0 0 auto; display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; justify-content: space-around; padding: 8px; gap: 10px; height: auto; background: #142b30; border: 1px solid #285057; border-radius: 12px; box-shadow: none; }
+#game-screen .dealer-zone { min-width: 0; flex: 0 1 auto; height: auto; min-height: 0; }
+#game-screen .dealer-chip { padding: 5px 8px; box-shadow: none; }
+#game-screen .chip-label, #game-screen .dealer-name { font: 600 10px system-ui; }
+#game-screen .dealer-name { overflow-wrap: anywhere; max-width: 95px; }
+#game-screen .chip-arrow { display: none; }
+#game-screen .crib-zone, #game-screen .starter-zone { min-width: 0; padding: 0; border: 0; background: none; box-shadow: none; }
+#game-screen .crib-zone h3, #game-screen .starter-zone h3 { font: 600 10px system-ui; margin: 0 0 4px; color: #a9c6ca; }
+#game-screen .crib-cards { min-height: 38px; gap: 2px; }
+#game-screen .crib-card { width: 22px; height: 34px; font-size: 12px; }
+#game-screen .crib-count { display: none; }
+#game-screen .starter-card { width: 38px; height: 52px; }
+#game-screen .starter-rank { font-size: 12px; }
+#game-screen .starter-suit { font-size: 17px; }
+#game-screen .play-dashboard:not([hidden]) { display: grid; grid-template-columns: 76px minmax(0, 1fr); padding: 8px; gap: 6px; background: #17263b; border: 1px solid #31445b; border-radius: 12px; }
+#game-screen .play-dashboard[hidden] { display: none; }
+#game-screen .pd-block { min-width: 0; max-width: none; padding: 0; }
+#game-screen .pd-count-block { grid-column: 1; grid-row: 1; }
+#game-screen .pd-pile-block { grid-column: 2; grid-row: 1; order: initial; }
+#game-screen .pd-title { font: 600 9px system-ui; color: #b8cce4; }
+#game-screen .pd-count-num b { font: 800 26px system-ui; }
+#game-screen .pd-turn-num, #game-screen .pd-scores-block { display: none; }
+#game-screen .pd-pile-cards { flex-wrap: nowrap; overflow-x: auto; min-height: 40px; gap: 4px; }
+#game-screen .pd-card { flex-shrink: 0; width: 28px; height: 38px; font-size: 9px; }
+#game-screen .pd-card .pd-card-suit { font-size: 12px; }
+#game-screen .pd-last-block { grid-column: 1 / -1; }
+#game-screen .pd-last-block summary { padding: 8px 2px; }
+#game-screen .player-area { padding: 10px 6px; gap: 8px; border-radius: 12px; border: 1px solid #31445b; background: #1a2b41; box-shadow: none; }
+#game-screen .local-seat, #game-screen .hand-label, #game-screen .peg-display { display: none; }
+#game-screen .turn-status { font: 700 12px/1.4 system-ui; padding: 0; min-height: 20px; text-align: center; animation: none; color: #b8cce4; }
+#game-screen .turn-status.yours { color: #9aefb8; }
+#game-screen .hand-cards { width: 100%; justify-content: center; gap: 5px; min-height: 88px; padding-top: 10px; }
+#game-screen .card { width: clamp(40px, 12vw, 60px); height: 76px; flex-shrink: 0; border: 2px solid #d6e0eb; border-radius: 8px; box-shadow: 0 3px 6px #0004; touch-action: manipulation; }
+#game-screen .card-rank { font-size: 13px; }
+#game-screen .card-suit { font-size: 22px; }
+#game-screen .card.discard-selected, #game-screen .card.selected { transform: translateY(-8px); border-color: #ffca46; box-shadow: 0 0 0 2px #ffca46; }
+#game-screen .hand-actions { position: static; inset: auto; display: flex; flex-wrap: wrap; width: 100%; min-height: 44px; padding: 0; gap: 8px; background: none; pointer-events: auto; }
+#game-screen .hand-actions .action-btn { flex: 1; min-width: 100px; min-height: 44px; padding: 10px !important; border: 0; border-radius: 9px; box-shadow: none; font: 700 12px system-ui !important; }
+#game-screen .phase-indicator { position: static; transform: none; margin: 0; padding: 8px; background: none; border: 0; }
+#game-screen .phase-label { font: 600 10px system-ui; color: #a9bed6; }
+#game-screen .phase-sub { font: 11px system-ui; }
+#game-screen .game-log { margin: 0 8px 8px; padding: 0 8px; max-height: none; border: 1px solid #31445b; border-radius: 10px; background: #142135; }
+#game-screen .log-messages { max-height: 140px; overflow: auto; }
+#game-screen .log-header { border: 0; margin: 0; }
+@media (max-width: 700px) {
+    body:has(#game-screen.active) #game-container { padding: env(safe-area-inset-top) 4px env(safe-area-inset-bottom); }
+    #game-screen > .pixel-border { border-radius: 12px; }
+    #game-screen .board-details .peg-board { min-width: 550px; }
+}
+@media (min-width: 900px) {
+    #game-screen > .pixel-border { display: grid; grid-template-columns: minmax(260px, 0.8fr) minmax(450px, 1.4fr); grid-template-rows: auto auto auto 1fr; align-content: start; padding: 12px; gap: 12px; max-width: 1160px; margin: auto; }
+    #game-screen .game-header { grid-column: 1 / -1; align-self: start; border-radius: 10px; }
+    #game-screen .crib-board { grid-column: 1; grid-row: 2; margin: 0; align-self: start; }
+    #game-screen .game-area { grid-column: 2; grid-row: 2 / 5; padding: 0; gap: 12px; }
+    #game-screen .phase-indicator { grid-column: 1; grid-row: 3; align-self: start; }
+    #game-screen .game-log { grid-column: 1; grid-row: 4; margin: 0; align-self: start; }
+    #game-screen .card { width: 64px; height: 92px; }
+    #game-screen .hand-cards { min-height: 106px; gap: 10px; }
+    #game-screen .player-area { padding: 16px; }
+}
