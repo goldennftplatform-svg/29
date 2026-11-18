@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="styles.css?v=20261006-nav">
     <link rel="stylesheet" href="safari-brand.css?v=country1">
     <link rel="stylesheet" href="app-layout.css?v=4">
-    <link rel="stylesheet" href="wallet-dropdown.css?v=2">
+    <link rel="stylesheet" href="wallet-dropdown.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -99,6 +99,8 @@
                     <section id="wallet-root" aria-label="LiteForge test wallet">
                         <p role="status">Opening wallet…</p>
                     </section>
+                    <button type="button" class="wallet-dropdown-claim" id="claim-tokens-btn" disabled>CLAIM TEST zkLTC</button>
+                    <p class="wallet-dropdown-hint" id="claim-status" role="status">Sign in to check your faucet status.</p>
                     <p class="wallet-dropdown-hint">Email sign-in creates a test wallet on LiteForge. Test coins have no cash value and are separate from LITEcrib game credits.</p>
                     <div class="wallet-dropdown-links">
                         <a href="wallet-setup.html">FULL VIEW ↗</a>
@@ -317,6 +319,114 @@
                         root.textContent = 'Wallet sign-in could not load. Reload shortly, or use FULL VIEW.';
                         root.setAttribute('role', 'alert');
                     }
+                });
+            }
+
+            // One-click faucet handoff. The cooldown comes from our relay proxy
+            // because the faucet API has no CORS headers; balance is read direct
+            // from the official LiteForge RPC.
+            var claimBtn = document.getElementById('claim-tokens-btn');
+            var claimStatus = document.getElementById('claim-status');
+            var faucetUrl = 'https://faucet.testnet.liteforge.zeeve.net/';
+            var rpcUrl = 'https://rpc.testnet.liteforge.zeeve.net/';
+            var relayUrl = (window.LITECRIB_CONFIG && window.LITECRIB_CONFIG.relayUrl || '').replace(/\/$/, '');
+            var watchedAddress = '';
+            var pollTimer = null;
+
+            function isAddress(value) { return /^0x[0-9a-f]{40}$/i.test((value || '').trim()); }
+
+            function rpcBalance(address) {
+                return fetch(rpcUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [address, 'latest'] }),
+                    signal: (window.AbortSignal && AbortSignal.timeout) ? AbortSignal.timeout(10000) : undefined
+                }).then(function (r) { return r.json(); }).then(function (body) {
+                    if (body.error) throw new Error(body.error.message);
+                    return BigInt(body.result);
+                });
+            }
+
+            function checkFaucet(address) {
+                claimBtn.disabled = true;
+                claimStatus.textContent = 'Checking faucet status…';
+                fetch(relayUrl + '/api/faucet/status?address=' + encodeURIComponent(address), { signal: (window.AbortSignal && AbortSignal.timeout) ? AbortSignal.timeout(6000) : undefined })
+                    .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+                    .then(function (data) {
+                        if (watchedAddress !== address) return;
+                        if (data.pending) {
+                            claimStatus.textContent = 'Faucet claim pending…';
+                            return;
+                        }
+                        if (data.eligible === false) {
+                            var next = Number(data.nextClaimAt || 0);
+                            var hours = next ? Math.ceil((next - Date.now()) / 3600000) : 0;
+                            claimStatus.textContent = hours > 0
+                                ? 'Claim used — next one in about ' + hours + 'h.'
+                                : 'Claim used in the last 24h.';
+                            return;
+                        }
+                        claimBtn.disabled = false;
+                        claimStatus.textContent = 'Ready — 0.05 test zkLTC available.';
+                    })
+                    .catch(function () {
+                        if (watchedAddress !== address) return;
+                        claimBtn.disabled = false;
+                        claimStatus.textContent = 'Faucet timer unavailable — it will show on the faucet page.';
+                    });
+            }
+
+            function watchAddress() {
+                var el = document.getElementById('evm-address');
+                var address = el ? (el.textContent || '').trim() : '';
+                if (!isAddress(address)) {
+                    if (watchedAddress) {
+                        watchedAddress = '';
+                        claimBtn.disabled = true;
+                        claimStatus.textContent = 'Sign in to check your faucet status.';
+                    }
+                    return;
+                }
+                if (address === watchedAddress) return;
+                watchedAddress = address;
+                checkFaucet(address);
+            }
+
+            if (claimBtn && claimStatus) {
+                new MutationObserver(watchAddress).observe(document.body, { childList: true, subtree: true });
+                watchAddress();
+
+                claimBtn.addEventListener('click', function () {
+                    var address = watchedAddress;
+                    if (!isAddress(address)) return;
+                    claimBtn.disabled = true;
+                    claimStatus.textContent = 'Opening faucet…';
+                    rpcBalance(address).then(function (balance) {
+                        navigator.clipboard.writeText(address).catch(function () {});
+                        claimStatus.textContent = 'Address copied. Paste it in the faucet and click Request tokens.';
+                        window.open(faucetUrl, '_blank', 'noopener');
+                        var started = Date.now();
+                        clearInterval(pollTimer);
+                        pollTimer = setInterval(function () {
+                            rpcBalance(address).then(function (now) {
+                                if (now > balance) {
+                                    clearInterval(pollTimer);
+                                    claimStatus.textContent = 'Tokens received — you can play the practice game.';
+                                    claimBtn.disabled = false;
+                                } else if (Date.now() - started > 180000) {
+                                    clearInterval(pollTimer);
+                                    claimStatus.textContent = 'No tokens yet. Check the faucet tab for its status.';
+                                    claimBtn.disabled = false;
+                                } else {
+                                    claimStatus.textContent = 'Waiting for tokens…';
+                                }
+                            }).catch(function () {});
+                        }, 5000);
+                    }).catch(function () {
+                        navigator.clipboard.writeText(address).catch(function () {});
+                        claimStatus.textContent = 'Address copied. Paste it in the faucet and click Request tokens.';
+                        window.open(faucetUrl, '_blank', 'noopener');
+                    });
                 });
             }
 

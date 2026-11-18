@@ -374,6 +374,24 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // The faucet API has no CORS headers, so static hosting cannot read it
+    // directly. This read-only proxy lets the wallet show the real cooldown.
+    if (p === '/api/faucet/status' && req.method === 'GET') {
+        const address = url.searchParams.get('address') || '';
+        if (!/^0x[0-9a-f]{40}$/i.test(address)) {
+            sendJson(res, 400, { success: false, error: 'invalid address' });
+            return;
+        }
+        const upstream = 'https://faucet.testnet.liteforge.zeeve.net/api/claimStatus?chain=liteforge-testnet&address=' + address;
+        fetch(upstream, { signal: AbortSignal.timeout(8000) })
+            .then(async (r) => {
+                const body = await r.json().catch(() => ({}));
+                sendJson(res, r.ok ? 200 : 502, { success: r.ok, ...body });
+            })
+            .catch(() => sendJson(res, 502, { success: false, error: 'Faucet status unavailable' }));
+        return;
+    }
+
     // ---- API: tables -----------------------------------------------------------
     if (p === '/api/tables' && req.method === 'GET') {
         sendJson(res, 200, { tables: Array.from(tables.values()).map(tableToJson) });

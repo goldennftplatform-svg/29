@@ -43,6 +43,21 @@
 }
 .wallet-dropdown-hint { margin: 10px 0; color: #b6c9e6; font-size: 12px; }
 .wallet-dropdown-links { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; }
+.wallet-dropdown-claim {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    margin: 10px 0 0;
+    padding: 10px 14px;
+    border: 1px solid #8fbaff;
+    border-radius: 9px;
+    background: #bed6ff;
+    color: #0b1429;
+    font: 700 12px system-ui, sans-serif;
+    letter-spacing: .04em;
+    cursor: pointer;
+}
+.wallet-dropdown-claim:disabled { opacity: .5; cursor: not-allowed; }
 
 /* Match the compact wallet page styles inside the dropdown. */
 #wallet-menu #wallet-root {
