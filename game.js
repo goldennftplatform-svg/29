@@ -40,6 +40,7 @@ class CribbageGame {
         this.recapEnabled = this.loadRecapPreference();
         this.pointRecapEntries = [];
         this.pointRecapRoundToken = null;
+        this.pointRecapPending = false;
         
         this.setupNetworkListeners();
     }
@@ -64,6 +65,7 @@ class CribbageGame {
         this.statsScoresInitialized = false;
         this.pointRecapEntries = [];
         this.pointRecapRoundToken = null;
+        this.pointRecapPending = false;
         this.hidePointRecap();
         this.updateMatchStatsButton();
         this.updateRecapToggle();
@@ -83,6 +85,12 @@ class CribbageGame {
         if (!token || token === this.lastStatsRoundToken) return;
         this.lastStatsRoundToken = token;
         this.matchStats.rounds += 1;
+        // The crib count rotates the dealer and deals a new hand. Keep the
+        // entries from the hand just counted until that recap has rendered.
+        if (this.pointRecapPending) {
+            this.pointRecapPending = false;
+            return;
+        }
         this.pointRecapEntries = [];
         this.pointRecapRoundToken = token;
         this.hidePointRecap();
@@ -1557,7 +1565,14 @@ class CribbageGame {
     async countHand() {
         if (!this.isSinglePlayer) return this.multiplayerAction('count');
         const recap = [];
+        const startingCount = this.engine.phase === 'COUNT_HAND';
+        const finishingCount = this.engine.phase === 'COUNT_CRIB';
+        if (startingCount) {
+            this.pointRecapEntries = [];
+            this.hidePointRecap();
+        }
         if (this.engine.phase === 'COUNT_HAND' || this.engine.phase === 'COUNT_CRIB') {
+            this.pointRecapPending = finishingCount;
             const r = this.engine.proceedToNextCount();
             const state = this.engine.getState(this.localPlayerIndex);
             if (r.handResult) {
@@ -1755,7 +1770,14 @@ checkAITurn(state) {
 
     async aiCount(ai, aiIndex, aiName, state) {
         const recap = [];
+        const startingCount = state.phase === 'COUNT_HAND';
+        const finishingCount = state.phase === 'COUNT_CRIB';
+        if (startingCount) {
+            this.pointRecapEntries = [];
+            this.hidePointRecap();
+        }
         if (state.phase === 'COUNT_HAND' || state.phase === 'COUNT_CRIB') {
+            this.pointRecapPending = finishingCount;
             const r = this.engine.proceedToNextCount();
             const fresh = this.engine.getState(this.localPlayerIndex);
             if (r.handResult) {

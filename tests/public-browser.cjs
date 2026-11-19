@@ -280,7 +280,7 @@ function pngFixture() {
                     pressed: document.getElementById('point-recap-toggle').getAttribute('aria-pressed')
                 }));
                 assert.equal(recap.hidden, false, 'Counted hands open a point recap');
-                assert.ok(recap.entries > 0, 'Point recap explains the counted hand');
+                assert.ok(recap.entries >= 2, 'Point recap keeps both the counted hands and crib together');
                 assert.ok(recap.explanations > 0, 'Point recap teaches what each scoring line means');
                 assert.match(recap.toggle, /RECAP ON/, 'Point recap is on by default');
                 assert.equal(recap.pressed, 'true', 'Recap toggle exposes its state to assistive tech');
