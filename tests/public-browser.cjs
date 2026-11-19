@@ -115,6 +115,29 @@ function pngFixture() {
                 assert.equal(await page.locator('#wallet-menu').isVisible(), true, 'Wallet dropdown opens from the main page');
                 assert.equal(await page.locator('#wallet-menu a[href="wallet-setup.html"]').isVisible(), true, 'Testnet wallet setup CTA is offered');
                 await page.locator('#wallet-toggle').click();
+                // Social/share metadata is part of the public product: a link shared
+                // on X/Twitter must carry the large 1200x630 card image.
+                const seo = await page.evaluate(async () => {
+                    const meta = key => document.querySelector(`meta[property="${key}"]`)?.content || document.querySelector(`meta[name="${key}"]`)?.content || '';
+                    const image = meta('og:image');
+                    const img = new Image();
+                    if (image) { img.src = image; await img.decode(); }
+                    return {
+                        title: document.title,
+                        ogTitle: meta('og:title'),
+                        twitterCard: meta('twitter:card'),
+                        twitterImage: meta('twitter:image'),
+                        image,
+                        imageWidth: img.naturalWidth,
+                        imageHeight: img.naturalHeight
+                    };
+                });
+                assert.match(seo.title, /LITEcrib/, 'Page title names the game');
+                assert.match(seo.ogTitle, /LITEcrib/, 'Open Graph title names the game');
+                assert.equal(seo.twitterCard, 'summary_large_image', 'Twitter uses the large image card');
+                assert.equal(seo.twitterImage, seo.image, 'Twitter and Open Graph share the same preview image');
+                assert.match(seo.image, /social-preview\.png/, 'Social preview image is published');
+                assert.deepEqual([seo.imageWidth, seo.imageHeight], [1200, 630], 'Social preview image is 1200x630');
                 await page.locator('#country-select').selectOption(country);
                 if (label === 'desktop') {
                     // Real PNG fixture exercises upload/resize/storage; not a generated PFP.

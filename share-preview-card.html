@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LITEcrib share card</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+    * { box-sizing: border-box; }
+    html, body { width: 1200px; height: 630px; margin: 0; overflow: hidden; }
+    body {
+        background:
+            radial-gradient(circle at 12% 18%, #238dde66, transparent 38%),
+            radial-gradient(circle at 92% 88%, #ff536b55, transparent 40%),
+            #10131c;
+        color: #fff4d4;
+        font-family: "VT323", ui-monospace, monospace;
+        position: relative;
+    }
+    body::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(0deg, #ffffff08 0 2px, transparent 2px 6px);
+        pointer-events: none;
+    }
+    .card {
+        position: absolute;
+        inset: 18px;
+        border: 4px solid #ffca46;
+        border-radius: 22px;
+        box-shadow: 0 0 0 8px #10131c, 12px 12px 0 #07090e;
+        background:
+            linear-gradient(115deg, #123e6ccc, #217fc2aa 48%, #6a2c49cc),
+            repeating-linear-gradient(113deg, transparent 0 24px, #ffffff09 25px 29px, transparent 30px 42px);
+        padding: 58px 64px;
+        display: grid;
+        grid-template-columns: 1.15fr .85fr;
+        gap: 40px;
+        align-items: center;
+    }
+    .copy { position: relative; z-index: 2; }
+    .eyebrow {
+        display: inline-block;
+        background: #10131c;
+        border: 3px solid #238dde;
+        color: #9ed4ff;
+        padding: 8px 16px;
+        font: 24px/1 "Press Start 2P", ui-monospace, monospace;
+        letter-spacing: 1px;
+        transform: rotate(-1deg);
+    }
+    h1 {
+        margin: 26px 0 12px;
+        color: #ffdc75;
+        font: 76px/1 "Press Start 2P", ui-monospace, monospace;
+        letter-spacing: -4px;
+        text-shadow: 5px 5px 0 #10131c, 10px 10px 0 #ff536b;
+    }
+    h2 {
+        margin: 0 0 18px;
+        color: #fff1d4;
+        font: 28px/1.2 "Press Start 2P", ui-monospace, monospace;
+        letter-spacing: 1px;
+    }
+    .pitch {
+        margin: 0 0 22px;
+        max-width: 600px;
+        color: #e8e1d3;
+        font-size: 34px;
+        line-height: 1.05;
+    }
+    .features {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 24px;
+    }
+    .chip {
+        padding: 7px 14px;
+        border: 2px solid #ffca46;
+        border-radius: 999px;
+        background: #10131ccc;
+        color: #ffe9a8;
+        font: 24px/1.1 "VT323", ui-monospace, monospace;
+    }
+    .url {
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 24px;
+        border-radius: 12px;
+        background: #ffca46;
+        color: #10131c;
+        box-shadow: 6px 6px 0 #10131c;
+        font: 30px/1 "VT323", ui-monospace, monospace;
+        letter-spacing: 1px;
+    }
+    .art {
+        position: relative;
+        height: 470px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .board {
+        position: absolute;
+        width: 420px;
+        height: 390px;
+        right: -10px;
+        bottom: 4px;
+        border: 6px solid #e6d5b0;
+        border-radius: 28px;
+        background:
+            repeating-linear-gradient(90deg, transparent 0 54px, #ffffff12 55px 58px),
+            repeating-linear-gradient(0deg, transparent 0 54px, #ffffff12 55px 58px),
+            #101724;
+        box-shadow: 12px 12px 0 #07090e;
+        transform: rotate(6deg);
+    }
+    .peg {
+        position: absolute;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 4px solid #10131c;
+        box-shadow: 0 0 0 3px #ffffff33;
+    }
+    .peg.gold { background: #ffca46; top: 62px; left: 72px; }
+    .peg.coral { background: #ff536b; top: 172px; left: 222px; }
+    .peg.blue { background: #238dde; top: 282px; left: 122px; }
+    .hand {
+        position: absolute;
+        top: 8px;
+        left: -18px;
+        display: flex;
+        align-items: center;
+    }
+    .playing-card {
+        width: 126px;
+        height: 178px;
+        margin-right: -34px;
+        border: 5px solid #10131c;
+        border-radius: 14px;
+        background: #fff8e8;
+        color: #10131c;
+        box-shadow: 7px 7px 0 #07090e;
+        padding: 12px;
+        font: 700 42px/1 "Press Start 2P", ui-monospace, monospace;
+        text-align: left;
+    }
+    .playing-card:nth-child(1) { transform: rotate(-16deg) translateY(24px); color: #d62f4b; }
+    .playing-card:nth-child(2) { transform: rotate(-2deg); color: #10131c; z-index: 2; }
+    .playing-card:nth-child(3) { transform: rotate(14deg) translateY(20px); color: #d62f4b; }
+    .playing-card small { display: block; font-size: 26px; margin-top: 6px; }
+    .score {
+        position: absolute;
+        right: 18px;
+        top: 14px;
+        z-index: 3;
+        padding: 12px 18px;
+        border: 4px solid #10131c;
+        border-radius: 12px;
+        background: #ffca46;
+        color: #10131c;
+        font: 30px/1 "Press Start 2P", ui-monospace, monospace;
+        box-shadow: 6px 6px 0 #07090e;
+        transform: rotate(4deg);
+    }
+    .stamp {
+        position: absolute;
+        right: 58px;
+        bottom: 28px;
+        z-index: 3;
+        color: #fff1d4;
+        font: 26px/1 "Press Start 2P", ui-monospace, monospace;
+        text-shadow: 3px 3px 0 #10131c;
+    }
+</style>
+</head>
+<body>
+    <div class="card">
+        <div class="copy">
+            <div class="eyebrow">LITECOIN × LITVM</div>
+            <h1>LITEcrib</h1>
+            <h2>8-BIT CRIBBAGE</h2>
+            <p class="pitch">Live tables, real rivals, and a testnet wallet that takes seconds to set up.</p>
+            <div class="features">
+                <span class="chip">1v1 + 3-player</span>
+                <span class="chip">PLAY VS AI</span>
+                <span class="chip">FREE IN BROWSER</span>
+            </div>
+            <div class="url">29.aisp.live <span>↗</span></div>
+        </div>
+        <div class="art">
+            <div class="board">
+                <span class="peg gold"></span>
+                <span class="peg coral"></span>
+                <span class="peg blue"></span>
+            </div>
+            <div class="hand">
+                <div class="playing-card">A<small>♠</small></div>
+                <div class="playing-card">5<small>♦</small></div>
+                <div class="playing-card">K<small>♥</small></div>
+            </div>
+            <div class="score">120</div>
+            <div class="stamp">🦁 ⚡</div>
+        </div>
+    </div>
+</body>
+</html>
