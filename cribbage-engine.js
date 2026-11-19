@@ -260,10 +260,15 @@ class CribbageEngine {
     }
 
     endPlayRound() {
+        // Capture the last player BEFORE resetting it; otherwise every new
+        // count would start at player 0 after a 31 or a GO.
+        const nextPlayerIndex = this.lastPlayIndex < 0
+            ? (this.currentPlayerIndex + 1) % this.playerCount
+            : (this.lastPlayIndex + 1) % this.playerCount;
         this.playPile = [];
         this.playCount = 0;
         this.lastPlayIndex = -1;
-        
+
         // Check if all cards played
         const allEmpty = this.hands.every(h => h.length === 0);
         if (allEmpty) {
@@ -271,7 +276,7 @@ class CribbageEngine {
             this.currentPlayerIndex = (this.dealerIndex + 1) % this.playerCount;
         } else {
             // Next player starts new count
-            this.currentPlayerIndex = (this.lastPlayIndex + 1) % this.playerCount;
+            this.currentPlayerIndex = nextPlayerIndex;
             // Skip players with no cards
             while (this.hands[this.currentPlayerIndex].length === 0) {
                 this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.playerCount;
@@ -293,8 +298,11 @@ class CribbageEngine {
         this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.playerCount;
 
         if (this.goCount >= this.playerCount - 1) {
-            // Everyone passed - last player gets GO point
-            this.awardPoints(this.lastPlayIndex, 1, 'GO');
+            // Everyone passed - the last player to lay a card gets GO. Guard
+            // the pathological all-pass case so we never award player -1.
+            if (this.lastPlayIndex >= 0) {
+                this.awardPoints(this.lastPlayIndex, 1, 'GO');
+            }
             this.endPlayRound();
         }
 
@@ -327,11 +335,11 @@ class CribbageEngine {
         else if (pairCount === 3) { points += 6; reasons.push('Three of a kind for 6'); }
         else if (pairCount === 4) { points += 12; reasons.push('Four of a kind for 12'); }
 
-        // Runs
-        const runLength = this.findRun(cards);
-        if (runLength >= 3) {
-            points += runLength;
-            reasons.push(`Run of ${runLength} for ${runLength}`);
+        // Runs — the last card must complete a run in the current pile.
+        const run = this.findRun(cards);
+        if (run.length >= 3) {
+            points += run.points;
+            reasons.push(`Run of ${run.length}${run.multiplicity > 1 ? ` x${run.multiplicity}` : ''} for ${run.points}`);
         }
 
         if (points > 0) {
@@ -343,25 +351,34 @@ class CribbageEngine {
     }
 
     findRun(cards) {
-        // Check for run ending with last card
-        const ranks = [...new Set(cards.map(c => c.order))].sort((a, b) => a - b);
-        if (ranks.length < 3) return 0;
-        
-        let maxRun = 0;
-        let currentRun = 1;
-        for (let i = 1; i < ranks.length; i++) {
-            if (ranks[i] === ranks[i-1] + 1) {
-                currentRun++;
-                maxRun = Math.max(maxRun, currentRun);
-            } else {
-                currentRun = 1;
-            }
+        const none = { length: 0, multiplicity: 0, points: 0 };
+        if (cards.length < 3) return none;
+
+        const lastRank = cards[cards.length - 1].order;
+        const rankCounts = {};
+        for (const c of cards) {
+            rankCounts[c.order] = (rankCounts[c.order] || 0) + 1;
         }
-        return maxRun >= 3 ? maxRun : 0;
+        const ranks = Object.keys(rankCounts).map(Number).sort((a, b) => a - b);
+
+        // Only runs containing the last card played can score. Expand around
+        // that rank to find the maximal consecutive sequence in the pile.
+        let start = ranks.indexOf(lastRank);
+        let end = start;
+        while (start > 0 && ranks[start - 1] === ranks[start] - 1) start--;
+        while (end < ranks.length - 1 && ranks[end + 1] === ranks[end] + 1) end++;
+
+        const sequence = ranks.slice(start, end + 1);
+        if (sequence.length < 3) return none;
+        const multiplicity = sequence.reduce((total, rank) => total * rankCounts[rank], 1);
+        return { length: sequence.length, multiplicity, points: sequence.length * multiplicity };
     }
 
     countHand(playerIndex, isCrib = false) {
-        const cards = isCrib ? [...this.crib] : [...this.hands[playerIndex]];
+        // Nobs must be judged against the four hand/crib cards only; the starter
+        // cannot be its own "Jack of the starter suit".
+        const scoringCards = isCrib ? [...this.crib] : [...this.hands[playerIndex]];
+        const cards = [...scoringCards];
         if (this.starter) cards.push(this.starter);
         
         let points = 0;
@@ -389,7 +406,7 @@ class CribbageEngine {
 
         // Nobs (Jack of same suit as starter)
         if (this.starter) {
-            const nobs = cards.filter(c => c.rank === 'J' && c.suit === this.starter.suit).length;
+            const nobs = scoringCards.filter(c => c.rank === 'J' && c.suit === this.starter.suit).length;
             if (nobs > 0) {
                 points += nobs;
                 breakdown.push(`${nobs} nob${nobs > 1 ? 's' : ''} for ${nobs}`);
@@ -432,47 +449,44 @@ class CribbageEngine {
     }
 
     countRuns(cards) {
-        const uniqueRanks = [...new Set(cards.map(c => c.order))].sort((a, b) => a - b);
-        if (uniqueRanks.length < 3) return { points: 0, desc: '' };
-
-        // Find all runs
-        let maxRunLen = 0;
-        let runCount = 0;
-        
-        for (let i = 0; i < uniqueRanks.length; i++) {
-            let len = 1;
-            for (let j = i + 1; j < uniqueRanks.length; j++) {
-                if (uniqueRanks[j] === uniqueRanks[j-1] + 1) len++;
-                else break;
-            }
-            if (len > maxRunLen) {
-                maxRunLen = len;
-                runCount = 1;
-            } else if (len === maxRunLen && len >= 3) {
-                runCount++;
-            }
-        }
-
-        if (maxRunLen < 3) return { points: 0, desc: '' };
-
-        // Count multiplicity for each rank in the run
         const rankCounts = {};
         for (const c of cards) {
-            if (uniqueRanks.includes(c.order)) {
-                rankCounts[c.order] = (rankCounts[c.order] || 0) + 1;
+            rankCounts[c.order] = (rankCounts[c.order] || 0) + 1;
+        }
+        const uniqueRanks = Object.keys(rankCounts).map(Number).sort((a, b) => a - b);
+        if (uniqueRanks.length < 3) return { points: 0, desc: '' };
+
+        // Collect maximal consecutive rank sequences. Duplicates do not create
+        // new sequences, but they do multiply the value of each sequence.
+        const runs = [];
+        for (let i = 0; i < uniqueRanks.length;) {
+            let len = 1;
+            while (i + len < uniqueRanks.length &&
+                   uniqueRanks[i + len] === uniqueRanks[i + len - 1] + 1) {
+                len++;
             }
+            if (len >= 3) {
+                const sequence = uniqueRanks.slice(i, i + len);
+                const multiplicity = sequence.reduce((total, rank) => total * rankCounts[rank], 1);
+                runs.push({ length: len, multiplicity, points: len * multiplicity });
+            }
+            i += len;
         }
+        if (!runs.length) return { points: 0, desc: '' };
 
-        let multiplicity = 1;
-        for (let i = 0; i < maxRunLen; i++) {
-            multiplicity *= (rankCounts[uniqueRanks[i]] || 1);
+        // Only the longest run(s) score; shorter runs inside them are already
+        // represented by those runs' multiplicity.
+        const maxLen = Math.max(...runs.map(r => r.length));
+        const longest = runs.filter(r => r.length === maxLen);
+        const points = longest.reduce((total, r) => total + r.points, 0);
+        let desc;
+        if (longest.length === 1) {
+            const m = longest[0].multiplicity;
+            desc = `Run of ${maxLen}${m > 1 ? ` x${m}` : ''} for ${points}`;
+        } else {
+            desc = `${longest.length} runs of ${maxLen} for ${points}`;
         }
-
-        const points = maxRunLen * multiplicity;
-        return { 
-            points, 
-            desc: `Run of ${maxRunLen}${multiplicity > 1 ? ` x${multiplicity}` : ''} for ${points}` 
-        };
+        return { points, desc };
     }
 
     countFlush(cards, isCrib) {
@@ -526,8 +540,15 @@ class CribbageEngine {
         if (this.phase === 'COUNT_HAND') {
             // Count current player's hand
             const handWho = this.currentPlayerIndex;
-            const result = this.countHand(this.currentPlayerIndex);
-            this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.playerCount;
+            const result = this.countHand(handWho);
+            this.currentPlayerIndex = (handWho + 1) % this.playerCount;
+
+            // countHand may end the game; never overwrite GAME_OVER with the
+            // next counting phase.
+            if (this.winner !== null) {
+                this.phase = 'GAME_OVER';
+                return { phase: this.phase, currentPlayer: this.currentPlayerIndex, handResult: result, handPlayer: handWho };
+            }
             
             if (this.currentPlayerIndex === this.dealerIndex) {
                 // Count dealer's hand
@@ -536,6 +557,17 @@ class CribbageEngine {
                 // acting player during COUNT_CRIB (the UI's count button
                 // reads state.currentPlayer for whose turn it is).
                 this.currentPlayerIndex = this.dealerIndex;
+                if (this.winner !== null) {
+                    this.phase = 'GAME_OVER';
+                    return {
+                        phase: this.phase,
+                        currentPlayer: this.currentPlayerIndex,
+                        handResult: result,
+                        handPlayer: handWho,
+                        dealerResult,
+                        dealerPlayer: this.dealerIndex
+                    };
+                }
                 this.phase = 'COUNT_CRIB';
                 return {
                     phase: this.phase,
@@ -549,9 +581,12 @@ class CribbageEngine {
             
             return { phase: this.phase, currentPlayer: this.currentPlayerIndex, handResult: result, handPlayer: handWho };
         } else if (this.phase === 'COUNT_CRIB') {
-            const result = this.countHand(this.dealerIndex, true);
+            const cribWho = this.dealerIndex;
+            const result = this.countHand(cribWho, true);
+            // endRound rotates the dealer, so capture the crib owner first.
+            const cribPlayer = cribWho;
             this.endRound();
-            return { phase: this.phase, cribResult: result };
+            return { phase: this.phase, cribResult: result, cribPlayer };
         }
     }
 
@@ -734,27 +769,33 @@ class CribbageAI {
         else if (pairCount === 3) points += 6;
         else if (pairCount === 4) points += 12;
 
-        const runLength = this.findRunStatic(cards);
-        if (runLength >= 3) points += runLength;
+        const run = this.findRunStatic(cards);
+        points += run.points;
 
         return { points };
     }
 
     findRunStatic(cards) {
-        const ranks = [...new Set(cards.map(c => c.order))].sort((a, b) => a - b);
-        if (ranks.length < 3) return 0;
-        
-        let maxRun = 0;
-        let currentRun = 1;
-        for (let i = 1; i < ranks.length; i++) {
-            if (ranks[i] === ranks[i-1] + 1) {
-                currentRun++;
-                maxRun = Math.max(maxRun, currentRun);
-            } else {
-                currentRun = 1;
-            }
+        // Mirror the authoritative play-phase findRun for AI decisions.
+        const none = { length: 0, multiplicity: 0, points: 0 };
+        if (cards.length < 3) return none;
+
+        const lastRank = cards[cards.length - 1].order;
+        const rankCounts = {};
+        for (const c of cards) {
+            rankCounts[c.order] = (rankCounts[c.order] || 0) + 1;
         }
-        return maxRun >= 3 ? maxRun : 0;
+        const ranks = Object.keys(rankCounts).map(Number).sort((a, b) => a - b);
+
+        let start = ranks.indexOf(lastRank);
+        let end = start;
+        while (start > 0 && ranks[start - 1] === ranks[start] - 1) start--;
+        while (end < ranks.length - 1 && ranks[end + 1] === ranks[end] + 1) end++;
+
+        const sequence = ranks.slice(start, end + 1);
+        if (sequence.length < 3) return none;
+        const multiplicity = sequence.reduce((total, rank) => total * rankCounts[rank], 1);
+        return { length: sequence.length, multiplicity, points: sequence.length * multiplicity };
     }
 
     // Decide whether to say GO
@@ -830,34 +871,32 @@ class CribbageAI {
     }
 
     countRunsStatic(cards) {
-        const uniqueRanks = [...new Set(cards.map(c => c.order))].sort((a, b) => a - b);
-        if (uniqueRanks.length < 3) return { points: 0 };
-
-        let maxRunLen = 0;
-        for (let i = 0; i < uniqueRanks.length; i++) {
-            let len = 1;
-            for (let j = i + 1; j < uniqueRanks.length; j++) {
-                if (uniqueRanks[j] === uniqueRanks[j-1] + 1) len++;
-                else break;
-            }
-            if (len > maxRunLen) maxRunLen = len;
-        }
-
-        if (maxRunLen < 3) return { points: 0 };
-
+        // Keep the AI's evaluation identical to the authoritative countRuns.
         const rankCounts = {};
         for (const c of cards) {
-            if (uniqueRanks.includes(c.order)) {
-                rankCounts[c.order] = (rankCounts[c.order] || 0) + 1;
+            rankCounts[c.order] = (rankCounts[c.order] || 0) + 1;
+        }
+        const uniqueRanks = Object.keys(rankCounts).map(Number).sort((a, b) => a - b);
+        if (uniqueRanks.length < 3) return { points: 0 };
+
+        const runs = [];
+        for (let i = 0; i < uniqueRanks.length;) {
+            let len = 1;
+            while (i + len < uniqueRanks.length &&
+                   uniqueRanks[i + len] === uniqueRanks[i + len - 1] + 1) {
+                len++;
             }
+            if (len >= 3) {
+                const sequence = uniqueRanks.slice(i, i + len);
+                const multiplicity = sequence.reduce((total, rank) => total * rankCounts[rank], 1);
+                runs.push({ length: len, points: len * multiplicity });
+            }
+            i += len;
         }
+        if (!runs.length) return { points: 0 };
 
-        let multiplicity = 1;
-        for (let i = 0; i < maxRunLen; i++) {
-            multiplicity *= (rankCounts[uniqueRanks[i]] || 1);
-        }
-
-        return { points: maxRunLen * multiplicity };
+        const maxLen = Math.max(...runs.map(r => r.length));
+        return { points: runs.filter(r => r.length === maxLen).reduce((total, r) => total + r.points, 0) };
     }
 
     countFlushStatic(cards, starter, isCrib) {

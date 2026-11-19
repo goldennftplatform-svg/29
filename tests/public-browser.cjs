@@ -66,7 +66,7 @@ function pngFixture() {
     // Pages deploys the whole commit atomically, but WHICH files differ changes
     // per commit: gating on game.js alone let a ?v= bump in index.html run the
     // browser against the previous deployment. Every file the page loads must land.
-    const watch = ['index.html', 'styles.css', 'game.js', 'config.js', 'network.js', 'wallet.js', 'metamask.js', 'wallet-dropdown.css', 'wallet-setup.html'];
+    const watch = ['index.html', 'styles.css', 'game.js', 'cribbage-engine.js', 'config.js', 'network.js', 'wallet.js', 'metamask.js', 'wallet-dropdown.css', 'wallet-setup.html'];
     const expected = new Map(watch.map(f => [f, fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n')]));
     let published = false;
     for (let i = 0; i < 60; i++) {

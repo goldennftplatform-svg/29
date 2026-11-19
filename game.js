@@ -1104,8 +1104,10 @@ class CribbageGame {
             }
             if (r.cribResult) {
                 const desc = r.cribResult.breakdown.length ? r.cribResult.breakdown.join('; ') : 'no points';
-                this.addLogEntry(`Crib counted: ${desc} (${r.cribResult.points} pts)`, 'score');
-                this.recordScoreEvent(state, this.engine.dealerIndex, r.cribResult.points,
+                const cribPlayer = r.cribPlayer == null ? this.engine.dealerIndex : r.cribPlayer;
+                const who = this.engine.players[cribPlayer] ? this.engine.players[cribPlayer].name : 'Dealer';
+                this.addLogEntry(`${who} counted crib: ${desc} (${r.cribResult.points} pts)`, 'score');
+                this.recordScoreEvent(state, cribPlayer, r.cribResult.points,
                     r.cribResult.breakdown.length ? 'CRIB: ' + r.cribResult.breakdown.join('; ') : 'no crib points');
             }
         }
@@ -1272,8 +1274,10 @@ checkAITurn(state) {
             }
             if (r.cribResult) {
                 const desc = r.cribResult.breakdown.length ? r.cribResult.breakdown.join('; ') : 'no points';
-                this.addLogEntry(`Crib counted: ${desc} (${r.cribResult.points} pts)`, 'score');
-                this.recordScoreEvent(fresh, this.engine.dealerIndex, r.cribResult.points,
+                const cribPlayer = r.cribPlayer == null ? this.engine.dealerIndex : r.cribPlayer;
+                const who = this.engine.players[cribPlayer] ? this.engine.players[cribPlayer].name : 'Dealer';
+                this.addLogEntry(`${who} counted crib: ${desc} (${r.cribResult.points} pts)`, 'score');
+                this.recordScoreEvent(fresh, cribPlayer, r.cribResult.points,
                     r.cribResult.breakdown.length ? 'CRIB: ' + r.cribResult.breakdown.join('; ') : 'no crib points');
             }
         }

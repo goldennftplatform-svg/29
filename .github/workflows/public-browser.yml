@@ -12,6 +12,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: node tests/scoring.cjs && node tests/metamask.cjs
       - run: npm install --no-save --package-lock=false playwright
       - run: npx playwright install --with-deps chromium
       # Both origins must serve the commit under test: a broken CNAME must not
