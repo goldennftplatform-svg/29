@@ -277,7 +277,7 @@ function pngFixture() {
                     entries: document.querySelectorAll('.recap-entry').length,
                     handCardCounts: [...document.querySelectorAll('.recap-entry:not(.crib)')].map(entry => entry.querySelectorAll('.recap-card').length),
                     cribCardCount: document.querySelector('.recap-entry.crib')?.querySelectorAll('.recap-card').length || 0,
-                    expectedCribCards: window.game.engine.playerCount + 1,
+                    expectedCribCards: window.game.engine.playerCount === 2 ? 5 : 4,
                     explanations: document.querySelectorAll('.recap-lines em').length,
                     toggle: document.getElementById('point-recap-toggle').textContent.trim(),
                     pressed: document.getElementById('point-recap-toggle').getAttribute('aria-pressed')
