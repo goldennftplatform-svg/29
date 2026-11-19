@@ -120,6 +120,63 @@ function hasNumericKey(values, key) {
 }
 
 {
+    // At 30, an opponent GO must pass the turn back to the last player so the
+    // ace can reach 31. The old playerCount - 1 guard ended the count here.
+    const e = makeEngine();
+    e.phase = 'PLAY';
+    e.dealerIndex = 1;
+    e.currentPlayerIndex = 0;
+    e.playCount = 28;
+    e.lastPlayIndex = 1;
+    e.goCount = 0;
+    e.playPile = [
+        { card: Card.fromString('10♣'), player: 1 },
+        { card: Card.fromString('10♦'), player: 0 },
+        { card: Card.fromString('8♥'), player: 1 }
+    ];
+    e.hands[0] = hand(['2♣', 'A♣']);
+    e.hands[1] = hand(['K♣']);
+
+    const illegalGo = e.sayGo(0);
+    assert.equal(illegalGo.success, false, 'A player with a legal card cannot say GO');
+    const playedTwo = e.playCard(0, 0);
+    assert.equal(playedTwo.playCount, 30);
+    assert.equal(e.currentPlayerIndex, 1);
+
+    const opponentGo = e.sayGo(1);
+    assert.equal(opponentGo.success, true);
+    assert.equal(e.phase, 'PLAY', 'One GO in a 2-player game must not close the count');
+    assert.equal(e.currentPlayerIndex, 0, 'The last player must get a chance to answer the GO');
+
+    const playedAce = e.playCard(0, 0);
+    assert.equal(playedAce.success, true);
+    assert.equal(e.scores[0], 2, '31 scores 2 after answering the GO');
+    assert.equal(e.playCount, 0, 'The next count starts fresh after 31');
+    assert.equal(playedAce.playPile.length, 0, 'The 31 pile is cleared for the next count');
+    console.log('PASS  opponent GO at 30 leaves the ace playable for 31');
+}
+
+{
+    // A count closes only after every player has passed. The last player to
+    // lay a card then collects GO even when they have no legal card left.
+    const e = makeEngine();
+    e.phase = 'PLAY';
+    e.currentPlayerIndex = 0;
+    e.playCount = 24;
+    e.lastPlayIndex = 0;
+    e.goCount = 0;
+    e.currentPlayerIndex = 1;
+    e.hands[0] = hand(['K♣']);
+    e.hands[1] = hand(['Q♣']);
+    assert.equal(e.sayGo(1).success, true);
+    assert.equal(e.phase, 'PLAY');
+    assert.equal(e.sayGo(0).success, true);
+    assert.equal(e.scores[0], 1, 'Last player to play gets the GO point');
+    assert.equal(e.playCount, 0);
+    console.log('PASS  GO closes only after every player passes');
+}
+
+{
     const e = makeEngine(3);
     e.phase = 'PLAY';
     e.dealerIndex = 2;

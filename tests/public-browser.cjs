@@ -131,7 +131,7 @@ function pngFixture() {
                         gameSrc: src('game.js')
                     };
                 });
-                assert.match(shell.engineSrc, /scoring-shell/, 'Scoring engine uses a fresh cache-busting version');
+                assert.match(shell.engineSrc, /go-pass/, 'Scoring engine uses a fresh cache-busting version');
                 assert.match(shell.gameSrc, /scoring-shell/, 'Game UI uses a fresh cache-busting version');
                 assert.match(shell.bodyImage, /gradient/, 'Landing uses a layered gradient app backdrop');
                 assert.ok(shell.shellRadius >= 18, 'Landing window has rounded app-chrome corners');

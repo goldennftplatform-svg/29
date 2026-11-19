@@ -297,9 +297,10 @@ class CribbageEngine {
         this.goCount++;
         this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.playerCount;
 
-        if (this.goCount >= this.playerCount - 1) {
-            // Everyone passed - the last player to lay a card gets GO. Guard
-            // the pathological all-pass case so we never award player -1.
+        // Every player must pass after the last card before the count closes.
+        // With two players, one opponent GO is not enough: the player who laid
+        // the last card still has the right to answer (e.g. an ace at 30).
+        if (this.goCount >= this.playerCount) {
             if (this.lastPlayIndex >= 0) {
                 this.awardPoints(this.lastPlayIndex, 1, 'GO');
             }
