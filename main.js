@@ -180,12 +180,15 @@ function setupEventListeners() {
     });
 }
 
-// Handle page unload
-window.addEventListener('beforeunload', () => {
-    if (game?.network) {
-        game.network.disconnect();
-    }
-});
+// Closing/backgrounding the page only drops the live stream. The durable
+// playerId, active table id, seat and hand all survive so the next load can
+// resume the same game. pagehide covers mobile tab switches that skip
+// beforeunload.
+function closeLiveStream() {
+    if (game?.network) game.network.disconnect();
+}
+window.addEventListener('beforeunload', closeLiveStream);
+window.addEventListener('pagehide', closeLiveStream);
 
 // Export for debugging
 window.game = game;

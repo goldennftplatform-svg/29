@@ -133,12 +133,15 @@ function pngFixture() {
                         buttonRadius: parseFloat(style('#play-ai-btn').borderTopLeftRadius),
                         engineSrc: src('cribbage-engine.js'),
                         gameSrc: src('game.js'),
+                        networkSrc: src('network.js'),
                         mainSrc: src('main.js'),
                         mapSrc: document.querySelector('link[href*="map-atmosphere.css"]')?.href || ''
                     };
                 });
                 assert.match(shell.engineSrc, /stop-at-121/, 'Scoring engine uses a fresh cache-busting version');
                 assert.match(shell.gameSrc, /scoring-shell/, 'Game UI uses a fresh cache-busting version');
+                assert.match(shell.gameSrc, /rejoin/, 'Game UI ships durable seat resume');
+                assert.match(shell.networkSrc, /rejoin-seat2/, 'Network client ships durable identity, seat token and auto-rejoin');
                 assert.match(shell.mainSrc, /token-play/, 'Entry point uses a fresh cache-busting version');
                 assert.match(shell.mapSrc, /living-atlas/, 'Living-atlas layer uses a fresh cache-busting version');
                 assert.match(shell.bodyImage, /gradient/, 'Landing uses a layered gradient app backdrop');

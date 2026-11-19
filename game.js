@@ -384,6 +384,12 @@ class CribbageGame {
             this.handleStateUpdate(state);
         });
 
+        this.network.on('roster', () => {
+            // Presence arrives as its own event; the next state snapshot will
+            // refresh the panels. Requesting it here keeps "AWAY" badges honest.
+            if (!this.isSinglePlayer) this.network.syncState();
+        });
+
         this.network.on('tableList', (tables) => {
             this.renderTableList(tables);
         });
@@ -391,12 +397,18 @@ class CribbageGame {
         this.network.on('chat', (chat) => {
             this.addLogEntry(`${chat.playerName}: ${chat.message}`, 'system');
         });
+
+        document.getElementById('leave-table-btn')?.addEventListener('click', () => this.confirmLeaveTable());
     }
 
     async init() {
         try {
             await this.network.connect();
             this.loadPlayerName();
+            // If this browser already owns a seat, reclaim it before rendering
+            // the lobby. The seat is keyed by a durable playerId, so a returning
+            // player gets the same hand and score instead of a fresh identity.
+            await this.network.resumeActiveTable(document.getElementById('player-name').value.trim().toUpperCase() || this.lastPlayerName || null);
             this.updateRecapToggle();
             this.loadTables();
         } catch (e) {
@@ -454,13 +466,14 @@ class CribbageGame {
                         `).join('')}
                     </div>
                     <div>${isCurrentPlayer ? 'YOUR TABLE · ' : ''}${playerCount}/${maxPlayers} SEATED</div>
-                    ${!isFull ? '<div>' + (isCurrentPlayer ? 'WAITING FOR OPPONENT' : 'CLICK TO SIT') + '</div>' : '<div class="table-full">FULL</div>'}
+                    ${isCurrentPlayer ? '<div>RESUME YOUR SEAT</div>' : (!isFull ? '<div>CLICK TO SIT</div>' : '<div class="table-full">FULL</div>')}
                 </div>
             `;
         }).join('');
 
-        // Add click handlers
-        grid.querySelectorAll('.table-card:not(.empty):not(.full)').forEach(card => {
+        // A full table is still clickable when it contains our durable id: that
+        // is the resume path after a refresh, tab close, or accidental back-out.
+        grid.querySelectorAll('.table-card:not(.empty)').forEach(card => {
             card.addEventListener('click', () => this.joinTable(card.dataset.tableId));
         });
     }
@@ -483,7 +496,14 @@ class CribbageGame {
         }
 
         this.savePlayerName(name);
-        
+
+        // Starting a new table is an explicit exit from any old human seat.
+        // Mark it away first so the relay never accumulates a ghost active
+        // table, while the old hand stays intact for its original identity.
+        if (!this.isSinglePlayer && this.network.tableId) {
+            await this.network.leaveTable();
+        }
+
         const result = await this.network.createTable(mode, name);
         if (!result.success && !result.ok) {
             this.showModal('TABLE UNAVAILABLE', this.escapeHtml(result.error || 'Could not create table.'), [
@@ -724,9 +744,32 @@ class CribbageGame {
 
     returnToLobby() {
         this.hideModal();
+        const leaveBtn = document.getElementById('leave-table-btn');
+        if (leaveBtn) leaveBtn.hidden = true;
+        // Going back to the lobby is not a forfeit. The seat and hand stay
+        // reserved on the relay under this browser's durable playerId.
+        if (!this.isSinglePlayer && this.network.tableId) {
+            this.addLogEntry('Your seat is saved. Reopen the table to resume.', 'system');
+        }
         document.getElementById('game-screen').classList.remove('active');
         document.getElementById('landing-screen').classList.add('active');
         this.loadTables();
+    }
+
+    confirmLeaveTable() {
+        if (this.isSinglePlayer || !this.network.tableId) return;
+        this.showModal('LEAVE TABLE?', `
+            <p>Leaving marks you away but keeps your seat, hand and score reserved for this browser. Nobody else can take them.</p>
+            <p>If you only stepped away, choose KEEP MY SEAT and come back — the same browser will rejoin the same game.</p>
+        `, [
+            { text: 'KEEP MY SEAT', class: 'primary', action: () => this.returnToLobby() },
+            { text: 'LEAVE TABLE', action: async () => {
+                await this.network.leaveTable();
+                this.tableId = null;
+                this.returnToLobby();
+            } },
+            { text: 'CANCEL', action: () => this.hideModal() }
+        ]);
     }
 
     setupLocalGame(mode, playerName) {
@@ -763,7 +806,9 @@ class CribbageGame {
     joinLocalGame() {
         document.getElementById('landing-screen').classList.remove('active');
         document.getElementById('game-screen').classList.add('active');
-        
+
+        const leaveBtn = document.getElementById('leave-table-btn');
+        if (leaveBtn) leaveBtn.hidden = true;
         document.getElementById('table-id-display').textContent = 'LOCAL LITEcrib';
         document.getElementById('mode-badge').textContent = this.engine.playerCount === 2 ? '1v1' : '3P';
         document.getElementById('status-dot').classList.add('connected');
@@ -797,6 +842,8 @@ class CribbageGame {
 
     joinGame(tableId) {
         this.tableId = tableId;
+        const leaveBtn = document.getElementById('leave-table-btn');
+        if (leaveBtn) leaveBtn.hidden = false;
         this.lastMatchMode = this.network.getTableList().find(t => t.id === tableId)?.mode || '1v1';
         this.lastPlayerName = document.getElementById('player-name')?.value.trim().toUpperCase() || '';
         this.resetMatchStats();
@@ -821,12 +868,20 @@ class CribbageGame {
         this.engine.playerCount = this.network.getTableList().find(t => t.id === this.network.tableId)?.mode === '3player' ? 3 : 2;
         if (state.phase !== 'WAITING') {
             this.tableId = this.network.tableId;
+            const leaveBtn = document.getElementById('leave-table-btn');
+            if (leaveBtn) leaveBtn.hidden = false;
             document.getElementById('landing-screen').classList.remove('active');
             document.getElementById('game-screen').classList.add('active');
             document.getElementById('table-id-display').textContent = `TABLE #${this.tableId.slice(-5).toUpperCase()}`;
         }
-        // Find our player index
+        // Find our player index. If the table was deleted while we were away,
+        // drop the stale resume target instead of rendering someone else's seat.
         const playerIdx = state.players.findIndex(p => p.id === this.network.playerId);
+        if (playerIdx === -1) {
+            this.network.clearActiveTable();
+            this.returnToLobby();
+            return;
+        }
         if (playerIdx !== -1) {
             this.localPlayerIndex = playerIdx;
             this.engine.setLocalPlayerIndex(playerIdx);
@@ -1101,11 +1156,12 @@ class CribbageGame {
             const actualIdx = state.players.findIndex(p => p.id === player.id);
             const isDealer = actualIdx === state.dealerIndex;
             const isCurrent = actualIdx === state.currentPlayer && state.phase === 'PLAY';
+            const isAway = player.left || player.connected === false;
             
             return `
-                <div class="opponent-panel ${isCurrent ? 'current-turn' : ''} ${isDealer ? 'dealer' : ''}" data-player="${actualIdx}">
+                <div class="opponent-panel ${isCurrent ? 'current-turn' : ''} ${isDealer ? 'dealer' : ''} ${isAway ? 'away' : ''}" data-player="${actualIdx}">
                     ${window.PlayerProfile ? PlayerProfile.markup(player.name, false) : ''}
-                    <div class="opponent-name">${this.escapeHtml(player.name)}</div>
+                    <div class="opponent-name">${this.escapeHtml(player.name)}${isAway ? ' <span class="away-badge">AWAY</span>' : ''}</div>
                     <div class="opponent-cards">
                         ${Array.from({length: player.handSize}, (_, i) => `
                             <div class="opponent-card-back">🂠</div>

@@ -89,7 +89,7 @@ class CribbageEngine {
 
     addPlayer(name, id) {
         if (this.players.length >= this.playerCount) return false;
-        this.players.push({ id, name, connected: true });
+        this.players.push({ id, name, connected: true, left: false });
         this.scores.push(0);
         this.roundStartScores.push(0);
         this.pegs.push([0, 0]); // [front, back]
@@ -690,7 +690,8 @@ class CribbageEngine {
                 pegs: this.pegs[i],
                 handSize: this.hands[i]?.length || 0,
                 isDealer: i === this.dealerIndex,
-                connected: p.connected
+                connected: p.connected !== false && !p.left,
+                left: !!p.left
             })),
             dealerIndex: this.dealerIndex,
             currentPlayer: this.currentPlayerIndex,

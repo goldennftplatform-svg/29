@@ -38,7 +38,7 @@
     <script type="application/ld+json">
     {"@context":"https://schema.org","@type":"VideoGame","name":"LITEcrib","description":"Browser cribbage with live 1v1 and 3-player tables, solo AI, and optional 20-point test-token matches against a funded AI bankroll.","url":"https://29.aisp.live/","image":"https://29.aisp.live/social-preview.png?v=1","gamePlatform":"Web browser","applicationCategory":"Game","operatingSystem":"Any","playMode":["SinglePlayer","MultiPlayer"],"inLanguage":"en","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock","url":"https://29.aisp.live/"},"publisher":{"@type":"Organization","name":"LITEcrib","url":"https://29.aisp.live/"}}
     </script>
-    <link rel="stylesheet" href="styles.css?v=20261119-scoring-shell">
+    <link rel="stylesheet" href="styles.css?v=20261119-scoring-rejoin">
     <link rel="stylesheet" href="safari-brand.css?v=country1">
     <link rel="stylesheet" href="app-layout.css?v=4">
     <link rel="stylesheet" href="wallet-dropdown.css?v=20261118-metamask-network">
@@ -216,6 +216,7 @@
                     </div>
                     <div class="connection-status">
                         <button type="button" class="match-stats-btn recap-toggle" id="point-recap-toggle" aria-pressed="true" aria-label="Toggle hand point recap">🧮 RECAP ON</button>
+                        <button type="button" class="match-stats-btn" id="leave-table-btn" hidden aria-label="Leave this human table">🚪 LEAVE</button>
                         <button type="button" class="match-stats-btn" id="match-stats-btn" hidden aria-label="Open last match result and statistics">📊 STATS</button>
                         <span class="status-dot" id="status-dot"></span>
                         <span id="status-text">CONNECTING...</span>
@@ -376,10 +377,10 @@
     <script src="config.js?v=20261118-metamask-network"></script>
     <script src="country-boards.js?v=country1"></script>
     <script src="player-profile.js?v=country1"></script>
-    <script src="game.js?v=20261119-scoring-shell-activity"></script>
-    <script src="network.js?v=20261015-human-tables"></script>
-    <script src="cribbage-engine.js?v=20261119-stop-at-121"></script>
-    <script src="main.js?v=20261119-token-play-activity2"></script>
+    <script src="game.js?v=20261119-scoring-shell-rejoin3"></script>
+    <script src="network.js?v=20261119-rejoin-seat2"></script>
+    <script src="cribbage-engine.js?v=20261119-stop-at-121-rejoin"></script>
+    <script src="main.js?v=20261119-token-play-rejoin"></script>
     <script src="wallet.js?v=20261119-token-play"></script>
     <script src="metamask.js?v=20261118-metamask-network"></script>
     <script>

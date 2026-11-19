@@ -1002,6 +1002,22 @@ header.pixel-header::after {
     text-align: center;
 }
 
+.opponent-panel.away {
+    opacity: .72;
+}
+
+.away-badge {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 2px 4px;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    font-family: 'VT323', monospace;
+    font-size: 10px;
+    letter-spacing: .08em;
+    vertical-align: middle;
+}
+
 .opponent-cards {
     display: flex;
     gap: 4px;

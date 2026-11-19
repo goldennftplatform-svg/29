@@ -4,16 +4,16 @@
  * Serves the static game files AND brokers tables between devices.
  *
  * Transport: Server-Sent Events (server -> client) + HTTP POST (client -> server).
- *  - GET  /api/stream?playerId=...&tableId=...   SSE channel; pushes
- *        "tableList", "state", "chat" events. Browser auto-reconnects; on
- *        reconnect the server re-sends everything so a freshly-loaded or
- *        recovered lobby catches up.
+ *  - GET  /api/stream?playerId=...&seatToken=...&tableId=...  SSE channel; pushes
+ *        "tableList", "state", "roster", "chat" events. Private state is only
+ *        sent when the stream proves seat ownership with the server-issued
+ *        seatToken. Browser auto-reconnects and replays the current view.
  *  - GET  /api/tables                        -> current table registry
- *  - POST /api/tables/                       -> {mode, name} creates a table
- *  - POST /api/tables/:id/join               -> {name} joins
- *  - POST /api/tables/:id/leave              -> {playerId} leaves
- *  - POST /api/tables/:id/state              -> {playerId, state} stores + broadcasts
- *  - POST /api/tables/:id/chat               -> {playerId, name, message} broadcasts
+ *  - POST /api/tables/                       -> {mode, name, playerId} creates a table
+ *  - POST /api/tables/:id/join               -> {name, playerId, seatToken?} joins/rejoins
+ *  - POST /api/tables/:id/leave              -> {playerId, seatToken} marks seat away
+ *  - POST /api/tables/:id/state              -> {playerId, seatToken, pull|state}
+ *  - POST /api/tables/:id/chat               -> {playerId, seatToken, message}
  *
  * In-memory state: tables vanish on server restart (fine for a relay; the
  * host just re-creates).
@@ -116,13 +116,51 @@ function sendSse(res, event, payload) {
     res.write(`event: ${event}\ndata: ${data}\n\n`);
 }
 
+function newSeatToken() {
+    return crypto.randomBytes(24).toString('hex');
+}
+
+// A seat token is a server-issued capability. The public table list exposes
+// player ids for matchmaking, but only the browser holding this secret may read
+// that player's private hand or submit their moves. That is what makes "same
+// person on rejoin" more than a guess based on a spoofable id.
+function seatIndexFor(table, playerId, seatToken) {
+    if (!playerId || !seatToken) return -1;
+    return table.players.findIndex(p => p.id === playerId && p.seatToken === seatToken);
+}
+
 function tableToJson(table) {
     return {
         id: table.id,
         mode: table.mode,
         created: table.created,
-        players: table.players.map(p => ({ id: p.id, name: p.name, ready: !!p.ready }))
+        players: table.players.map(p => ({
+            id: p.id,
+            name: p.name,
+            ready: !!p.ready,
+            connected: p.connected !== false && !p.left,
+            left: !!p.left,
+            lastSeen: p.lastSeen || table.created
+        }))
     };
+}
+
+// A seat is reserved for its playerId. Leaving or losing the live stream only
+// marks the seat away - the engine index, hand and score stay untouched so the
+// same player can reclaim exactly where they left off.
+function setSeatPresence(table, playerId, connected) {
+    const index = table.players.findIndex(p => p.id === playerId);
+    if (index === -1) return null;
+    const seat = table.players[index];
+    seat.connected = !!connected;
+    seat.lastSeen = Date.now();
+    if (connected) seat.left = false;
+    const enginePlayer = table.engine.players[index];
+    if (enginePlayer) {
+        enginePlayer.connected = !!connected;
+        enginePlayer.left = !!seat.left;
+    }
+    return seat;
 }
 
 function broadcastTables() {
@@ -135,8 +173,9 @@ function broadcastState(table, state, sourcePlayerId) {
     // (idempotent snapshot semantics — the sender's own render already has it,
     // re-rendering the same object is a no-op visually).
     streams.forEach((s) => {
-        const index = table.players.findIndex(p => p.id === s.playerId);
-        if (s.tableId === table.id && index !== -1) sendSse(s.res, 'state', { tableId: table.id, state: table.engine.getState(index) });
+        if (s.tableId !== table.id) return;
+        const index = seatIndexFor(table, s.playerId, s.seatToken);
+        if (index !== -1) sendSse(s.res, 'state', { tableId: table.id, state: table.engine.getState(index) });
     });
 }
 
@@ -151,7 +190,7 @@ function broadcastTableJoin(table) {
     // handshake bookkeeping (kept identical to the "state" event shape).
     streams.forEach((s) => {
         if (s.tableId === table.id) {
-            const index = table.players.findIndex(p => p.id === s.playerId);
+            const index = seatIndexFor(table, s.playerId, s.seatToken);
             if (index !== -1) sendSse(s.res, 'state', { tableId: table.id, state: table.engine.getState(index) });
         }
     });
@@ -172,7 +211,7 @@ function createTable(mode, name, playerId) {
         engine: new CribbageEngine(mode === '1v1' ? 2 : 3)
     };
     if (name) {
-        table.players.push({ id: playerId, name, ready: true });
+        table.players.push({ id: playerId, name, ready: true, connected: true, left: false, lastSeen: Date.now(), seatToken: newSeatToken() });
         table.engine.addPlayer(name, playerId);
     }
     tables.set(id, table);
@@ -184,31 +223,62 @@ function findTable(id) {
     return tables.get(id) || null;
 }
 
-function joinTable(table, playerName, playerId) {
-    if (table.players.some(p => p.id === playerId)) return { success: true, playerId, table };
+function joinTable(table, playerName, playerId, seatToken) {
+    const existing = table.players.find(p => p.id === playerId);
+    if (existing) {
+        // Same id AND same server-issued secret -> same seat, same hand, same
+        // score. A stranger who merely learned the public id cannot reclaim it.
+        if (!seatToken || existing.seatToken !== seatToken) {
+            return { success: false, error: 'This seat belongs to another browser. Open the original table to resume.', code: 'SEAT_TOKEN_REQUIRED' };
+        }
+        setSeatPresence(table, playerId, true);
+        broadcastTableJoin(table);
+        return { success: true, resumed: true, playerId, seatToken: existing.seatToken, table };
+    }
     const maxPlayers = table.mode === '1v1' ? 2 : 3;
     if (table.players.length >= maxPlayers) {
         return { success: false, error: 'Table full' };
     }
-    const player = { id: playerId, name: playerName, ready: true };
+    const player = { id: playerId, name: playerName, ready: true, connected: true, left: false, lastSeen: Date.now(), seatToken: newSeatToken() };
     table.players.push(player);
     table.engine.addPlayer(playerName, playerId);
     if (table.players.length === maxPlayers) table.engine.startGame();
     broadcastTableJoin(table);
-    return { success: true, playerId: player.id, table };
+    return { success: true, resumed: false, playerId: player.id, seatToken: player.seatToken, table };
 }
 
-function leaveTable(table, playerId) {
-    table.players = table.players.filter(p => p.id !== playerId);
-    if (table.players.length === 0) {
-        tables.delete(table.id);
-    }
+function leaveTable(table, playerId, seatToken) {
+    const seatIndex = seatIndexFor(table, playerId, seatToken);
+    if (seatIndex === -1) return false;
+    const seat = table.players[seatIndex];
+    // Do NOT splice the player out. Doing so shifts engine indices and serves
+    // the wrong private hand to the remaining seats. Mark the seat away and
+    // hold it for the same identity to reclaim.
+    seat.left = true;
+    setSeatPresence(table, playerId, false);
+    broadcastState(table);
+    if (table.players.every(p => p.left)) tables.delete(table.id);
     broadcastTables();
     return true;
 }
 
+function hasLiveStream(tableId, playerId, seatToken) {
+    for (const s of streams) {
+        if (s.tableId === tableId && s.playerId === playerId && s.seatToken === seatToken) return true;
+    }
+    return false;
+}
+
 function unsubscribeStream(s) {
     streams.delete(s);
+    if (s.tableId && s.playerId && s.seatToken && !hasLiveStream(s.tableId, s.playerId, s.seatToken)) {
+        const table = findTable(s.tableId);
+        if (table && seatIndexFor(table, s.playerId, s.seatToken) !== -1) {
+            setSeatPresence(table, s.playerId, false);
+            broadcastState(table);
+            broadcastTables();
+        }
+    }
     s.res.end();
 }
 
@@ -408,6 +478,7 @@ const server = http.createServer((req, res) => {
     // ---- API: SSE stream -----------------------------------------------------
     if (p === '/api/stream' && req.method === 'GET') {
         const playerId = url.searchParams.get('playerId');
+        const seatToken = url.searchParams.get('seatToken') || '';
         const tableId = url.searchParams.get('tableId') || null;
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
@@ -417,7 +488,7 @@ const server = http.createServer((req, res) => {
         });
         res.write('retry: 1500\n\n');
 
-        const stream = { res, playerId, tableId, flags: new Set() };
+        const stream = { res, playerId, seatToken, tableId, flags: new Set() };
         streams.add(stream);
 
         // Initial catch-up: table list for everyone; state+roster for the table.
@@ -427,10 +498,14 @@ const server = http.createServer((req, res) => {
         if (tableId) {
             const table = findTable(tableId);
             if (table) {
-                const index = table.players.findIndex(p => p.id === playerId);
-                if (index !== -1) sendSse(res, 'state', { tableId, state: table.engine.getState(index) });
-                const roster = tableToJson(table);
-                sendSse(res, 'roster', roster.players);
+                const index = seatIndexFor(table, playerId, seatToken);
+                if (index !== -1) {
+                    setSeatPresence(table, playerId, true);
+                    sendSse(res, 'state', { tableId, state: table.engine.getState(index) });
+                    const roster = tableToJson(table);
+                    sendSse(res, 'roster', roster.players);
+                    broadcastTables();
+                }
             }
         }
 
@@ -474,7 +549,7 @@ const server = http.createServer((req, res) => {
                 return;
             }
             const table = createTable(body.mode, body.name, body.playerId);
-            sendJson(res, 200, { success: true, table: tableToJson(table), tableId: table.id });
+            sendJson(res, 200, { success: true, table: tableToJson(table), tableId: table.id, seatToken: table.players[0].seatToken });
         });
         return;
     }
@@ -496,28 +571,35 @@ const server = http.createServer((req, res) => {
                         sendJson(res, 400, { success: false, error: 'name required' });
                         return;
                     }
-                    const result = joinTable(table, body.name, body.playerId);
+                    const result = joinTable(table, body.name, body.playerId, body.seatToken);
                     if (result.success) {
-                        sendJson(res, 200, { success: true, playerId: result.playerId, table: tableToJson(table), tableId });
+                        sendJson(res, 200, { success: true, resumed: !!result.resumed, playerId: result.playerId, seatToken: result.seatToken, table: tableToJson(table), tableId });
                     } else {
                         sendJson(res, 409, result);
                     }
                     return;
                 }
                 case 'leave': {
-                    leaveTable(table, body && body.playerId);
+                    if (!leaveTable(table, body && body.playerId, body && body.seatToken)) {
+                        sendJson(res, 403, { success: false, error: 'Seat ownership check failed' });
+                        return;
+                    }
                     sendJson(res, 200, { success: true });
                     return;
                 }
                 case 'state': {
-                    const index = table.players.findIndex(p => p.id === (body && body.playerId));
-                    if (index === -1) { sendJson(res, 403, { success: false, error: 'Take a seat first' }); return; }
+                    const index = seatIndexFor(table, body && body.playerId, body && body.seatToken);
+                    if (index === -1) { sendJson(res, 403, { success: false, error: 'Seat ownership check failed' }); return; }
                     sendJson(res, 200, { success: true, ok: true, state: table.engine.getState(index) });
                     return;
                 }
                 case 'action': {
-                    const index = table.players.findIndex(p => p.id === (body && body.playerId));
-                    if (index === -1) { sendJson(res, 403, { success: false, error: 'Take a seat first' }); return; }
+                    const index = seatIndexFor(table, body && body.playerId, body && body.seatToken);
+                    if (index === -1) { sendJson(res, 403, { success: false, error: 'Seat ownership check failed' }); return; }
+                    if (table.players[index].left) {
+                        sendJson(res, 403, { success: false, error: 'Rejoin the table to continue' });
+                        return;
+                    }
                     const engine = table.engine;
                     const payload = body.payload || {};
                     let result = { success: false, error: 'Invalid move' };
@@ -543,10 +625,12 @@ const server = http.createServer((req, res) => {
                         sendJson(res, 400, { success: false, error: 'message required' });
                         return;
                     }
+                    const index = seatIndexFor(table, body.playerId, body.seatToken);
+                    if (index === -1) { sendJson(res, 403, { success: false, error: 'Seat ownership check failed' }); return; }
                     const chat = {
                         tableId,
                         playerId: body.playerId || '',
-                        playerName: body.name || 'Anonymous',
+                        playerName: table.players[index].name,
                         message: body.message,
                         timestamp: Date.now()
                     };
