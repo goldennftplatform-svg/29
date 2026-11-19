@@ -1,0 +1,295 @@
+/* Living-atlas atmosphere.
+   Loaded after app-shell.css so the glossy chrome keeps its shape but gains
+   worn map lines, soft grass, fireflies, and a warmer magical palette. The
+   pixel/cribbage surface itself stays crisp and readable. */
+
+:root {
+    --map-mist: #9ec3cf;
+    --map-moss: #5d9d76;
+    --map-moss-deep: #1d4a41;
+    --map-parchment: #e6d8ad;
+    --map-glow: rgba(255, 220, 138, 0.58);
+    --map-grass: url('map-grass.svg');
+    --map-contours: url('map-contours.svg');
+}
+
+/* Ambient terrain sits behind the app window. Fixed layers never intercept
+   clicks and the container is raised so text and controls stay above them. */
+body {
+    background:
+        var(--map-contours),
+        radial-gradient(circle at 14% 2%, rgba(158, 195, 207, 0.2), transparent 36%),
+        radial-gradient(circle at 86% 16%, rgba(255, 107, 127, 0.11), transparent 32%),
+        radial-gradient(circle at 48% 100%, rgba(255, 202, 70, 0.13), transparent 46%),
+        linear-gradient(160deg, #0b1d2c 0%, var(--app-bg) 55%, #050d16 100%);
+    background-size: 480px 320px, auto, auto, auto, auto;
+    background-attachment: fixed;
+}
+
+body::before,
+body::after {
+    content: '';
+    position: fixed;
+    inset: -8%;
+    z-index: 0;
+    pointer-events: none;
+}
+
+body::before {
+    background:
+        var(--map-grass),
+        radial-gradient(ellipse at 18% 26%, rgba(158, 195, 207, 0.18), transparent 42%),
+        radial-gradient(ellipse at 82% 68%, rgba(93, 157, 118, 0.18), transparent 46%);
+    background-size: 160px 120px, auto, auto;
+    opacity: 0.52;
+    animation: mapDrift 28s ease-in-out infinite alternate;
+}
+
+body::after {
+    background:
+        radial-gradient(circle at 22% 30%, rgba(255, 224, 150, 0.5) 0 1px, transparent 2px),
+        radial-gradient(circle at 68% 74%, rgba(255, 224, 150, 0.42) 0 1px, transparent 2px),
+        radial-gradient(circle at 86% 18%, rgba(174, 232, 197, 0.34) 0 1px, transparent 2px),
+        radial-gradient(ellipse at 50% 50%, transparent 54%, rgba(2, 8, 14, 0.5) 100%);
+    background-size: 260px 220px, 340px 280px, 410px 330px, 100% 100%;
+    opacity: 0.7;
+    animation: mapFireflies 11s ease-in-out infinite alternate;
+}
+
+#game-container {
+    position: relative;
+    z-index: 1;
+}
+
+@keyframes mapDrift {
+    from { transform: translate3d(-1%, 0, 0) scale(1.02); opacity: 0.42; }
+    to { transform: translate3d(1.5%, -1%, 0) scale(1.05); opacity: 0.62; }
+}
+
+@keyframes mapFireflies {
+    from { transform: translate3d(0, 0, 0); opacity: 0.42; }
+    to { transform: translate3d(1.5%, -1%, 0); opacity: 0.78; }
+}
+
+/* Shared app window: contour ink over the existing glass. ----------------- */
+.pixel-border,
+#landing-screen > .pixel-border,
+#game-screen > .pixel-border {
+    border-color: rgba(170, 210, 205, 0.42);
+    background:
+        var(--map-contours),
+        radial-gradient(circle at 14% 0%, rgba(75, 163, 255, 0.12), transparent 34%),
+        linear-gradient(160deg, var(--app-panel), var(--app-panel-2));
+    background-size: 480px 320px, auto, auto;
+    box-shadow:
+        0 24px 64px rgba(2, 8, 20, 0.55),
+        0 2px 0 rgba(255, 255, 255, 0.07) inset,
+        0 0 42px rgba(93, 157, 118, 0.1);
+}
+
+/* Landing --------------------------------------------------------------- */
+header.pixel-header {
+    background:
+        var(--map-grass),
+        radial-gradient(circle at 50% -40%, rgba(255, 202, 70, 0.26), transparent 55%),
+        repeating-linear-gradient(113deg, transparent 0 24px, rgba(255, 255, 255, 0.025) 25px 29px, transparent 30px 42px),
+        linear-gradient(125deg, #133e5b, #227a8c 44%, #5a3a4c);
+    background-size: 160px 120px, auto, auto, auto;
+}
+
+.header-wallet-link {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3), 0 0 18px rgba(158, 195, 207, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.mode-selector h2::before,
+.table-list h2::before,
+.player-setup h2::before,
+.ai-section h2::before,
+.profile-customizer h2::before {
+    content: '\2726  ';
+    color: var(--map-glow);
+    text-shadow: 0 0 14px rgba(255, 220, 138, 0.5);
+}
+
+.mode-card {
+    position: relative;
+    background:
+        var(--map-grass),
+        linear-gradient(160deg, rgba(39, 80, 128, 0.82), rgba(10, 24, 43, 0.94));
+    background-size: 160px 120px, auto;
+}
+
+.mode-card::before {
+    background:
+        radial-gradient(circle at 18% 8%, rgba(255, 236, 170, 0.24), transparent 46%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent);
+}
+
+.mode-card::after {
+    content: '\2727';
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    z-index: 1;
+    color: rgba(255, 220, 138, 0.62);
+    font-size: 12px;
+    text-shadow: 0 0 14px rgba(255, 220, 138, 0.7);
+    pointer-events: none;
+}
+
+.mode-card.selected {
+    background:
+        var(--map-contours),
+        linear-gradient(160deg, rgba(92, 71, 25, 0.78), rgba(24, 31, 48, 0.96));
+    background-size: 480px 320px, auto;
+}
+
+.table-card {
+    background:
+        var(--map-contours),
+        linear-gradient(160deg, rgba(25, 51, 82, 0.9), rgba(9, 20, 36, 0.94));
+    background-size: 480px 320px, auto;
+}
+
+.table-card.empty {
+    background:
+        var(--map-grass),
+        linear-gradient(160deg, rgba(25, 51, 82, 0.72), rgba(9, 20, 36, 0.92));
+    background-size: 160px 120px, auto;
+}
+
+/* Disclosure panels and setup ------------------------------------------- */
+.stake-banner,
+.metamask-cta,
+#landing-screen .profile-customizer {
+    background:
+        var(--map-contours),
+        linear-gradient(160deg, rgba(25, 56, 88, 0.9), rgba(9, 21, 38, 0.96));
+    background-size: 480px 320px, auto;
+}
+
+.metamask-cta {
+    border-color: rgba(158, 195, 207, 0.48);
+    background:
+        var(--map-grass),
+        linear-gradient(160deg, rgba(21, 46, 79, 0.94), rgba(8, 18, 33, 0.96));
+    background-size: 160px 120px, auto;
+}
+
+.player-setup {
+    background:
+        var(--map-contours),
+        linear-gradient(180deg, rgba(12, 26, 45, 0.58), rgba(6, 15, 27, 0.78));
+    background-size: 480px 320px, auto;
+}
+
+/* Game table ------------------------------------------------------------ */
+#game-screen > .pixel-border {
+    border-color: rgba(154, 205, 191, 0.42);
+    background:
+        var(--map-contours),
+        radial-gradient(circle at 12% 0%, rgba(75, 163, 255, 0.13), transparent 38%),
+        radial-gradient(circle at 90% 100%, rgba(115, 227, 171, 0.1), transparent 36%),
+        linear-gradient(160deg, #10223a, #08142a 78%);
+    background-size: 480px 320px, auto, auto, auto;
+}
+
+#game-screen .game-header {
+    background:
+        var(--map-grass),
+        linear-gradient(120deg, rgba(22, 56, 62, 0.98), rgba(15, 29, 51, 0.98));
+    background-size: 160px 120px, auto;
+}
+
+#game-screen .crib-board {
+    background:
+        var(--map-contours),
+        linear-gradient(160deg, rgba(18, 39, 66, 0.88), rgba(8, 19, 34, 0.94));
+    background-size: 480px 320px, auto;
+}
+
+#game-screen .opponent-panel {
+    background:
+        var(--map-grass),
+        linear-gradient(160deg, rgba(24, 48, 79, 0.88), rgba(9, 21, 38, 0.94));
+    background-size: 160px 120px, auto;
+}
+
+#game-screen .center-area {
+    border-color: rgba(143, 214, 171, 0.32);
+    background:
+        var(--map-grass),
+        radial-gradient(circle at 50% -10%, rgba(115, 227, 171, 0.2), transparent 65%),
+        linear-gradient(160deg, rgba(14, 48, 50, 0.9), rgba(9, 23, 39, 0.95));
+    background-size: 160px 120px, auto, auto;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 32px rgba(93, 157, 118, 0.12);
+}
+
+#game-screen .play-dashboard:not([hidden]) {
+    background:
+        var(--map-contours),
+        linear-gradient(160deg, rgba(25, 52, 86, 0.96), rgba(10, 23, 41, 0.96));
+    background-size: 480px 320px, auto;
+}
+
+#game-screen .player-area {
+    background:
+        var(--map-grass),
+        linear-gradient(180deg, rgba(25, 50, 82, 0.9), rgba(8, 19, 35, 0.96));
+    background-size: 160px 120px, auto;
+}
+
+#game-screen .game-log {
+    background:
+        var(--map-contours),
+        linear-gradient(160deg, rgba(18, 37, 62, 0.91), rgba(8, 17, 31, 0.94));
+    background-size: 480px 320px, auto;
+}
+
+#game-screen .log-entry {
+    border-color: rgba(158, 195, 207, 0.2);
+    background: rgba(8, 19, 34, 0.64);
+}
+
+/* Cards keep their ink crisp but borrow warm parchment and a soft edge. --- */
+#game-screen .card,
+#game-screen .pd-card,
+#game-screen .crib-card {
+    border-color: rgba(255, 244, 214, 0.95);
+    background:
+        radial-gradient(circle at 18% 14%, rgba(255, 224, 160, 0.38), transparent 32%),
+        linear-gradient(160deg, #fffdf7, #e9f1e5);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.34), inset 0 0 0 1px rgba(93, 157, 118, 0.18), inset 0 1px 0 #fff;
+}
+
+#game-screen .card.selected,
+#game-screen .card.discard-selected {
+    border-color: #ffdc75;
+    box-shadow: 0 22px 34px rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(255, 202, 70, 0.55), 0 0 26px rgba(255, 220, 138, 0.42), inset 0 1px 0 #fff;
+}
+
+#game-screen .dealer-chip {
+    background: radial-gradient(circle at 30% 20%, #fff0b8, #e8a92c 72%);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3), 0 0 18px rgba(255, 220, 138, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* Modals ---------------------------------------------------------------- */
+.modal {
+    background:
+        var(--map-contours),
+        linear-gradient(160deg, #152c49, #08162a);
+    background-size: 480px 320px, auto;
+}
+
+.modal-header {
+    background:
+        var(--map-grass),
+        radial-gradient(circle at 50% -40%, rgba(255, 202, 70, 0.24), transparent 60%),
+        linear-gradient(120deg, #1d4d7f, #6a2c49);
+    background-size: 160px 120px, auto, auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body::before,
+    body::after { animation: none !important; }
+}

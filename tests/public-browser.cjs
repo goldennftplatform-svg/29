@@ -66,7 +66,7 @@ function pngFixture() {
     // Pages deploys the whole commit atomically, but WHICH files differ changes
     // per commit: gating on game.js alone let a ?v= bump in index.html run the
     // browser against the previous deployment. Every file the page loads must land.
-    const watch = ['index.html', 'styles.css', 'app-shell.css', 'game.js', 'cribbage-engine.js', 'config.js', 'network.js', 'wallet.js', 'metamask.js', 'wallet-dropdown.css', 'wallet-setup.html'];
+    const watch = ['index.html', 'styles.css', 'app-shell.css', 'map-atmosphere.css', 'map-grass.svg', 'map-contours.svg', 'game.js', 'cribbage-engine.js', 'config.js', 'network.js', 'wallet.js', 'metamask.js', 'wallet-dropdown.css', 'wallet-setup.html'];
     const expected = new Map(watch.map(f => [f, fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n')]));
     let published = false;
     for (let i = 0; i < 60; i++) {
@@ -123,9 +123,13 @@ function pngFixture() {
                     const src = fragment => document.querySelector(`script[src*="${fragment}"]`)?.src || '';
                     return {
                         bodyImage: style('body').backgroundImage,
+                        bodyTexture: getComputedStyle(document.body, '::before').backgroundImage,
+                        shellTexture: style('#landing-screen > .pixel-border').backgroundImage,
+                        moss: getComputedStyle(document.documentElement).getPropertyValue('--map-moss').trim(),
                         shellRadius: parseFloat(style('#landing-screen > .pixel-border').borderTopLeftRadius),
                         modeRadius: parseFloat(style('.mode-card').borderTopLeftRadius),
                         modeShadow: style('.mode-card').boxShadow,
+                        modeTexture: style('.mode-card').backgroundImage,
                         buttonRadius: parseFloat(style('#play-ai-btn').borderTopLeftRadius),
                         engineSrc: src('cribbage-engine.js'),
                         gameSrc: src('game.js')
@@ -134,6 +138,10 @@ function pngFixture() {
                 assert.match(shell.engineSrc, /go-pass/, 'Scoring engine uses a fresh cache-busting version');
                 assert.match(shell.gameSrc, /scoring-shell/, 'Game UI uses a fresh cache-busting version');
                 assert.match(shell.bodyImage, /gradient/, 'Landing uses a layered gradient app backdrop');
+                assert.match(shell.moss, /^#/, 'Living-atlas palette is loaded');
+                assert.match(shell.bodyTexture, /map-grass\.svg/, 'Ambient grass texture sits behind the app');
+                assert.match(shell.shellTexture, /map-contours\.svg/, 'App window carries subtle contour-map ink');
+                assert.match(shell.modeTexture, /map-grass\.svg/, 'Mode cards use the living-map texture');
                 assert.ok(shell.shellRadius >= 18, 'Landing window has rounded app-chrome corners');
                 assert.ok(shell.modeRadius >= 12, 'Mode cards use soft app tiles');
                 assert.ok(shell.modeShadow && shell.modeShadow !== 'none', 'Mode cards are elevated with soft shadows');
@@ -209,11 +217,17 @@ function pngFixture() {
                     const style = selector => getComputedStyle(document.querySelector(selector));
                     return {
                         shellRadius: parseFloat(style('#game-screen > .pixel-border').borderTopLeftRadius),
-                        cardRadius: parseFloat(style('#hand-cards .card').borderTopLeftRadius)
+                        cardRadius: parseFloat(style('#hand-cards .card').borderTopLeftRadius),
+                        tableTexture: style('#game-screen > .pixel-border').backgroundImage,
+                        clearingTexture: style('#game-screen .center-area').backgroundImage,
+                        cardTexture: style('#hand-cards .card').backgroundImage
                     };
                 });
                 assert.ok(gameShell.shellRadius >= 18, 'Game table keeps the rounded app shell');
                 assert.ok(gameShell.cardRadius >= 8, 'Hand cards keep the glossy rounded treatment');
+                assert.match(gameShell.tableTexture, /map-contours\.svg/, 'Game table keeps the contour-map ink');
+                assert.match(gameShell.clearingTexture, /map-grass\.svg/, 'Play area reads as a soft map clearing');
+                assert.match(gameShell.cardTexture, /radial-gradient/, 'Hand cards keep the warm parchment glint');
                 assert.equal(await page.evaluate(() => game.engine.players.length), mode === '1v1' ? 2 : 3);
                 assert.equal(await page.evaluate(() => game.engine.phase), 'DISCARD');
                 assert.equal(await page.evaluate(() => game.boardGeo.key), country);
