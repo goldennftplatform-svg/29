@@ -79,8 +79,8 @@
             isStaticHost: isStaticHost,
             litvm: {
                 chainId: Number((typeof process !== 'undefined' && process.env && process.env.LITVM_CHAIN_ID) || 4441),
-                rpcUrl: (typeof process !== 'undefined' && process.env && process.env.LITVM_RPC_URL) || 'https://liteforge.rpc.caldera.xyz/http',
-                explorer: 'https://liteforge.explorer.caldera.xyz',
+                rpcUrl: (typeof process !== 'undefined' && process.env && process.env.LITVM_RPC_URL) || 'https://rpc.testnet.liteforge.zeeve.net/',
+                explorer: 'https://explorer.testnet.liteforge.zeeve.net',
                 gasToken: 'zkLTC',
                 live: false
             }

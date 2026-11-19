@@ -23,6 +23,9 @@
         .wallet-input { display: block; width: 100%; min-height: 46px; margin-top: 5px; padding: 10px 12px; border: 1px solid #5f7fae; border-radius: 9px; background: #0b1429; color: #ecf2ff; font: 15px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
         .wallet-send-review { padding: 12px; border: 1px solid #8fbaff; border-radius: 10px; background: #0f1f3d; }
         .hint { color: #b6c9e6; font-size: 14px; }
+        .metamask-status { color: #92efbe; font-size: 14px; }
+        .metamask-status[data-error="true"] { color: #ffb9b9; }
+        .metamask-status[hidden] { display: none; }
         [role=alert] { color: #ffb9b9; overflow-wrap: anywhere; }
         @media (max-width: 480px) { main { padding: 14px; margin: 12px auto; } section { padding: 16px; } }
     </style>
@@ -32,11 +35,20 @@
     <a href="./">← Back to LITEcrib</a>
     <h1>Your easy test wallet</h1>
     <span class="badge">LiteForge · Chain 4441 · TESTNET</span>
+    <section aria-label="Add LitVM LiteForge to MetaMask">
+        <h2>One-click MetaMask setup</h2>
+        <p>Add LitVM LiteForge (chain 4441, zkLTC) to MetaMask in one click. This only configures the network — it does not connect an account, move coins, or stake tokens. Test coins have no cash value.</p>
+        <button type="button" data-litvm-add data-litvm-status="setup-metamask-status">ADD LITVM LITEFORGE TO METAMASK</button>
+        <p class="metamask-status" id="setup-metamask-status" role="status" hidden></p>
+        <p class="hint">No MetaMask? The button opens the official install page.</p>
+    </section>
     <section id="wallet-root" aria-label="Wallet setup"><p role="status">Loading secure wallet sign-in…</p></section>
     <p class="hint">This Privy email sign-in wallet is separate from an existing LITEcrib email/password custody account. Connecting it does not migrate your existing wallet or game credits.</p>
-    <p><a href="https://docs.litvm.com/get-started-on-testnet/add-to-wallet" target="_blank" rel="noopener noreferrer">Official network guide ↗</a></p>
+    <p><a href="https://testnet.litvm.com" data-litvm-guide target="_blank" rel="noopener noreferrer">LitVM Testnet Hub ↗</a></p>
     <noscript>Enable JavaScript to set up your wallet.</noscript>
 </main>
+<script src="./config.js?v=20261118-metamask-network"></script>
+<script src="./metamask.js?v=20261118-metamask-network"></script>
 <script type="module">
     import('./wallet-assets/wallet.js?v=wallet-send-export-20261118').catch(() => {
         const root = document.getElementById('wallet-root');

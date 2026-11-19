@@ -26,8 +26,8 @@ const registry = [
         coin: 'zkLTC',
         network: 'testnet',
         chainId: 4441,
-        rpcUrl: 'https://liteforge.rpc.caldera.xyz/http',
-        explorer: 'https://liteforge.explorer.caldera.xyz',
+        rpcUrl: 'https://rpc.testnet.liteforge.zeeve.net/',
+        explorer: 'https://explorer.testnet.liteforge.zeeve.net',
         enabled: true,
         feeNote: 'Settle on LiteForge testnet. Chain gas only; the house match fee is still 0.5%.',
         desc: 'Derived EVM address (m/44\u2032/60\u2032) mirroring your custody wallet — the same seed, on Litecoin\u2019s rollup. Balance read on-chain.'

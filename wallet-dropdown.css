@@ -58,6 +58,27 @@
     cursor: pointer;
 }
 .wallet-dropdown-claim:disabled { opacity: .5; cursor: not-allowed; }
+.wallet-dropdown-metamask {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    margin: 8px 0 0;
+    padding: 10px 14px;
+    border: 1px solid #7ea9e8;
+    border-radius: 9px;
+    background: transparent;
+    color: #dbe8ff;
+    font: 700 12px system-ui, sans-serif;
+    letter-spacing: .04em;
+    cursor: pointer;
+}
+.wallet-dropdown-metamask:hover { background: #1a3154; }
+#wallet-menu .metamask-status {
+    margin: 8px 0 0;
+    color: #92efbe;
+    font-size: 12px;
+}
+#wallet-menu .metamask-status[data-error="true"] { color: #ffb9b9; }
 
 /* Match the compact wallet page styles inside the dropdown. */
 #wallet-menu #wallet-root {

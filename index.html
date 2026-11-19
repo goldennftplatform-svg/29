@@ -38,10 +38,10 @@
     <script type="application/ld+json">
     {"@context":"https://schema.org","@type":"VideoGame","name":"LITEcrib","description":"Browser cribbage with live 1v1 and 3-player tables, solo AI, and optional 20-point test-token matches against a funded AI bankroll.","url":"https://29.aisp.live/","image":"https://29.aisp.live/social-preview.png?v=1","gamePlatform":"Web browser","applicationCategory":"Game","operatingSystem":"Any","playMode":["SinglePlayer","MultiPlayer"],"inLanguage":"en","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock","url":"https://29.aisp.live/"},"publisher":{"@type":"Organization","name":"LITEcrib","url":"https://29.aisp.live/"}}
     </script>
-    <link rel="stylesheet" href="styles.css?v=20261119-token-play">
+    <link rel="stylesheet" href="styles.css?v=20261118-metamask-network">
     <link rel="stylesheet" href="safari-brand.css?v=country1">
     <link rel="stylesheet" href="app-layout.css?v=4">
-    <link rel="stylesheet" href="wallet-dropdown.css?v=4">
+    <link rel="stylesheet" href="wallet-dropdown.css?v=20261118-metamask-network">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -66,6 +66,15 @@
                         <p id="stake-copy">Sign in to the LITEcrib wallet to stake 20 test pts (0.02 tLTC) per 1v1 AI match. Test coins have no cash value.</p>
                     </div>
                 </div>
+
+                <section class="metamask-cta" aria-label="Add LitVM LiteForge to MetaMask">
+                    <div>
+                        <strong>ADD LITVM TO METAMASK — ONE CLICK</strong>
+                        <p>Adds the LitVM LiteForge testnet (chain 4441, zkLTC) to MetaMask. It does not connect an account or stake tokens. Test coins have no cash value.</p>
+                    </div>
+                    <button type="button" class="pixel-btn metamask-add" data-litvm-add data-litvm-status="metamask-status">ADD LITVM TO METAMASK</button>
+                    <p class="metamask-status" id="metamask-status" role="status" hidden></p>
+                </section>
                 
                 <div class="mode-selector">
                     <h2>SELECT GAME MODE</h2>
@@ -138,10 +147,12 @@
                     </section>
                     <button type="button" class="wallet-dropdown-claim" id="claim-tokens-btn" disabled>CLAIM TEST zkLTC</button>
                     <p class="wallet-dropdown-hint" id="claim-status" role="status">Sign in to check your faucet status.</p>
-                    <p class="wallet-dropdown-hint">Email sign-in creates a test wallet on LiteForge. Sign in to the LITEcrib credit wallet below to stake those credits in token matches. Test coins have no cash value.</p>
+                    <button type="button" class="wallet-dropdown-metamask" data-litvm-add data-litvm-status="metamask-dropdown-status">ADD LITVM TO METAMASK</button>
+                    <p class="metamask-status" id="metamask-dropdown-status" role="status" hidden></p>
+                    <p class="wallet-dropdown-hint">Email sign-in creates a test wallet on LiteForge. Sign in to the LITEcrib credit wallet below to stake those credits in token matches. Adding LitVM to MetaMask only configures the network; test coins have no cash value.</p>
                     <div class="wallet-dropdown-links">
                         <a href="wallet-setup.html">FULL VIEW ↗</a>
-                        <a href="https://docs.litvm.com/get-started-on-testnet/add-to-wallet" target="_blank" rel="noopener noreferrer">NETWORK GUIDE ↗</a>
+                        <a href="https://testnet.litvm.com" data-litvm-guide target="_blank" rel="noopener noreferrer">LITVM HUB ↗</a>
                     </div>
                     <div class="wallet-dropdown-divider">LITECRIB CUSTODY WALLET</div>
                     <div class="wallet-panel" id="wallet-panel" hidden>
@@ -331,7 +342,7 @@
         </div>
     </div>
 
-    <script src="config.js?v=20261015-human-tables"></script>
+    <script src="config.js?v=20261118-metamask-network"></script>
     <script src="country-boards.js?v=country1"></script>
     <script src="player-profile.js?v=country1"></script>
     <script src="game.js?v=20261119-token-play"></script>
@@ -339,6 +350,7 @@
     <script src="cribbage-engine.js?v=20260920-startup"></script>
     <script src="main.js?v=20261119-token-play"></script>
     <script src="wallet.js?v=20261119-token-play"></script>
+    <script src="metamask.js?v=20261118-metamask-network"></script>
     <script>
         (function () {
             var toggle = document.getElementById('wallet-toggle');

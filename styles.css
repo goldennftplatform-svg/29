@@ -2118,9 +2118,51 @@ header.pixel-header::before {
     color: var(--lite-black);
     font-weight: bold;
 }
+
+/* Public, static-host-safe MetaMask network onboarding. */
+.metamask-cta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    margin: -4px 0 16px;
+    padding: 12px 14px;
+    border: 2px solid #3d5c86;
+    border-radius: 8px;
+    background: #101f36;
+    color: #eaf1ff;
+}
+.metamask-cta > div { flex: 1 1 280px; }
+.metamask-cta strong {
+    display: block;
+    margin-bottom: 3px;
+    color: #a7ccff;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    line-height: 1.5;
+}
+.metamask-cta p {
+    margin: 0;
+    font-family: 'VT323', monospace;
+    font-size: 15px;
+    line-height: 1.25;
+}
+.metamask-add { flex: 0 0 auto; white-space: nowrap; }
+.metamask-status {
+    flex-basis: 100%;
+    color: #92efbe;
+    font-family: 'VT323', monospace;
+    font-size: 15px;
+}
+.metamask-status[data-error="true"] { color: #ffb9b9; }
+.metamask-status[hidden] { display: none; }
+
 @media (max-width: 620px) {
     .stake-banner { align-items: flex-start; padding: 10px; }
     .stake-coin { flex-basis: 34px; width: 34px; height: 34px; font-size: 18px; }
     .stake-banner strong { font-size: 8px; }
     .stake-banner p { font-size: 14px; }
+    .metamask-cta { align-items: flex-start; padding: 10px; }
+    .metamask-cta strong { font-size: 8px; }
+    .metamask-add { width: 100%; white-space: normal; }
 }

@@ -66,7 +66,7 @@ function pngFixture() {
     // Pages deploys the whole commit atomically, but WHICH files differ changes
     // per commit: gating on game.js alone let a ?v= bump in index.html run the
     // browser against the previous deployment. Every file the page loads must land.
-    const watch = ['index.html', 'styles.css', 'game.js', 'config.js', 'network.js', 'wallet.js'];
+    const watch = ['index.html', 'styles.css', 'game.js', 'config.js', 'network.js', 'wallet.js', 'metamask.js', 'wallet-dropdown.css', 'wallet-setup.html'];
     const expected = new Map(watch.map(f => [f, fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n')]));
     let published = false;
     for (let i = 0; i < 60; i++) {
@@ -87,6 +87,18 @@ function pngFixture() {
             ['island', devices['Pixel 7'], '1v1', 'madagascar']
         ]) {
             const context = await browser.newContext(options);
+            // Stub the MetaMask provider so the public one-click CTA can be
+            // exercised on static hosting without a browser extension.
+            await context.addInitScript(() => {
+                window.__metamaskCalls = [];
+                window.ethereum = {
+                    isMetaMask: true,
+                    request: async function (args) {
+                        window.__metamaskCalls.push(args);
+                        return null;
+                    }
+                };
+            });
             const page = await context.newPage();
             const errors = [];
             const httpErrors = [];
@@ -120,6 +132,19 @@ function pngFixture() {
                 assert.match(await page.locator('#stake-copy').innerText(), /20 test pts|test pts/, 'Stake amount is explained');
                 assert.equal(await page.locator('#stake-badge').innerText(), 'FREE PLAY', 'Static visitors see free play, not token play');
                 await page.locator('#wallet-toggle').click();
+                // One-click LitVM onboarding must work outside the relay-only
+                // wallet panel, including on a static-host deployment.
+                const metamaskButton = page.locator('.metamask-add');
+                assert.equal(await metamaskButton.isVisible(), true, 'Public MetaMask add-network CTA is visible');
+                const chain = await page.evaluate(() => window.LITEcribMetaMask.chainParam);
+                assert.equal(chain.chainId, '0x1159', 'MetaMask CTA uses official LiteForge chain ID 4441');
+                assert.equal(chain.rpcUrls[0], 'https://rpc.testnet.liteforge.zeeve.net/', 'MetaMask CTA uses the live official RPC');
+                assert.equal(chain.nativeCurrency.symbol, 'zkLTC', 'MetaMask CTA uses the zkLTC gas token');
+                await metamaskButton.click();
+                await page.waitForFunction(() => /ADDED/.test(document.getElementById('metamask-status').textContent));
+                const addRequest = await page.evaluate(() => window.__metamaskCalls.find(c => c.method === 'wallet_addEthereumChain'));
+                assert.ok(addRequest, 'Clicking the CTA calls wallet_addEthereumChain');
+                assert.deepEqual(addRequest.params[0], chain, 'CTA sends the displayed, verified network parameters');
                 // Social/share metadata is part of the public product: a link shared
                 // on X/Twitter must carry the large 1200x630 card image.
                 const seo = await page.evaluate(async () => {

@@ -33,6 +33,8 @@ services:
       - key: LITECRIB_ADMIN_TOKEN
         sync: false               # bearer token guarding /api/wallet/payout
       - key: LITVM_RPC_URL
-        value: https://liteforge.rpc.caldera.xyz/http   # LitVM testnet (chain 4441); clears on mainnet
+        value: https://rpc.testnet.liteforge.zeeve.net/   # LitVM testnet (chain 4441); clears on mainnet
       - key: LITVM_CHAIN_ID
         value: "4441"
+      - key: LITVM_EXPLORER
+        value: https://explorer.testnet.liteforge.zeeve.net

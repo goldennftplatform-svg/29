@@ -129,8 +129,8 @@ you want secrets without exporting them).
 - **LitVM seam** (`/api/wallet/litvm` + `litvm` config block): EVM-compatible
   rollup on Arbitrum Orbit + BitcoinOS, Litecoin Foundation endorsed. Testnet
   **LiteForge** is live (Chain ID `4441`,
-  RPC `https://liteforge.rpc.caldera.xyz/http`, explorer
-  `liteforge.explorer.caldera.xyz`). Mainnet / token generation / audits are
+  RPC `https://rpc.testnet.liteforge.zeeve.net/`, explorer
+  `https://explorer.testnet.liteforge.zeeve.net`). Mainnet / token generation / audits are
   pending — the seam is read-only today. When settlement moves on-chain, a
   `Settlement` contract (script hash + game result releases escrow) replaces
   the `payoutFromPlayer` bridge behind the same API surface, so the client

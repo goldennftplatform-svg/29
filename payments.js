@@ -247,8 +247,8 @@ async function settle({ matchId, winner }) {
 const litvm = {
     config: {
         chainId: Number(process.env.LITVM_CHAIN_ID || 4441),
-        rpcUrl: process.env.LITVM_RPC_URL || 'https://liteforge.rpc.caldera.xyz/http',
-        explorer: process.env.LITVM_EXPLORER || 'https://liteforge.explorer.caldera.xyz',
+        rpcUrl: process.env.LITVM_RPC_URL || 'https://rpc.testnet.liteforge.zeeve.net/',
+        explorer: process.env.LITVM_EXPLORER || 'https://explorer.testnet.liteforge.zeeve.net',
         gasToken: 'zkLTC',
         settlement: settlement.address,
         live: false               // true when mainnet + audited bridge exist
