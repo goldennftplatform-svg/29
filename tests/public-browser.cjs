@@ -66,7 +66,7 @@ function pngFixture() {
     // Pages deploys the whole commit atomically, but WHICH files differ changes
     // per commit: gating on game.js alone let a ?v= bump in index.html run the
     // browser against the previous deployment. Every file the page loads must land.
-    const watch = ['index.html', 'styles.css', 'game.js', 'cribbage-engine.js', 'config.js', 'network.js', 'wallet.js', 'metamask.js', 'wallet-dropdown.css', 'wallet-setup.html'];
+    const watch = ['index.html', 'styles.css', 'app-shell.css', 'game.js', 'cribbage-engine.js', 'config.js', 'network.js', 'wallet.js', 'metamask.js', 'wallet-dropdown.css', 'wallet-setup.html'];
     const expected = new Map(watch.map(f => [f, fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n')]));
     let published = false;
     for (let i = 0; i < 60; i++) {
@@ -116,6 +116,23 @@ function pngFixture() {
                 }
                 await page.waitForFunction(() => window.game && window.game.network.connected, null, { timeout: 90000 });
                 assert.equal(await page.evaluate(() => game.network.getConnectionStatus().mode), 'relay', 'Published frontend connects to the shared multiplayer relay');
+                // The retro surface stays, but it now sits in a glossy app shell:
+                // rounded window, gradient backdrop, elevated cards and buttons.
+                const shell = await page.evaluate(() => {
+                    const style = selector => getComputedStyle(document.querySelector(selector));
+                    return {
+                        bodyImage: style('body').backgroundImage,
+                        shellRadius: parseFloat(style('#landing-screen > .pixel-border').borderTopLeftRadius),
+                        modeRadius: parseFloat(style('.mode-card').borderTopLeftRadius),
+                        modeShadow: style('.mode-card').boxShadow,
+                        buttonRadius: parseFloat(style('#play-ai-btn').borderTopLeftRadius)
+                    };
+                });
+                assert.match(shell.bodyImage, /gradient/, 'Landing uses a layered gradient app backdrop');
+                assert.ok(shell.shellRadius >= 18, 'Landing window has rounded app-chrome corners');
+                assert.ok(shell.modeRadius >= 12, 'Mode cards use soft app tiles');
+                assert.ok(shell.modeShadow && shell.modeShadow !== 'none', 'Mode cards are elevated with soft shadows');
+                assert.ok(shell.buttonRadius >= 10, 'Primary actions use rounded glossy buttons');
                 // No relay here: the relay-only deposit/SSO panel must stay shut
                 // (it used to open and 404 on every field) and the player is
                 // pointed at LiteForge onboarding instead.
@@ -183,6 +200,15 @@ function pngFixture() {
                 await page.locator('.mode-card[data-mode="' + mode + '"]').click();
                 await page.locator('#play-ai-btn').click();
                 await page.waitForFunction(() => document.querySelector('#game-screen').classList.contains('active'));
+                const gameShell = await page.evaluate(() => {
+                    const style = selector => getComputedStyle(document.querySelector(selector));
+                    return {
+                        shellRadius: parseFloat(style('#game-screen > .pixel-border').borderTopLeftRadius),
+                        cardRadius: parseFloat(style('#hand-cards .card').borderTopLeftRadius)
+                    };
+                });
+                assert.ok(gameShell.shellRadius >= 18, 'Game table keeps the rounded app shell');
+                assert.ok(gameShell.cardRadius >= 8, 'Hand cards keep the glossy rounded treatment');
                 assert.equal(await page.evaluate(() => game.engine.players.length), mode === '1v1' ? 2 : 3);
                 assert.equal(await page.evaluate(() => game.engine.phase), 'DISCARD');
                 assert.equal(await page.evaluate(() => game.boardGeo.key), country);
