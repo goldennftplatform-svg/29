@@ -43,6 +43,25 @@ function hasNumericKey(values, key) {
 }
 
 {
+    // Four spades plus the spade starter: 4-6-8-10 with 7 up is 10 points,
+    // not just the flush. 7+8 is a fifteen (2), 6-7-8 is a run (3), and the
+    // five-card flush is 5. No second fifteen exists in this hand.
+    const r = countHand(['4♠', '6♠', '8♠', '10♠'], '7♠');
+    assert.equal(r.points, 10, '4-6-8-10 spades with 7 spades must score 10');
+    assert.deepEqual(r.breakdown, ['1 fifteen for 2', 'Run of 3 for 3', 'Flush for 5']);
+    console.log('PASS  4-6-8-10 spades with 7 spades scores 10 (15 + run + flush)');
+}
+
+{
+    // Same flush shape without the 7 up is correctly flush-only. This guards
+    // against "fixing" the reported hand by awarding points that are not there.
+    const r = countHand(['4♠', '6♠', '8♠', '10♠'], '2♠');
+    assert.equal(r.points, 5, '4-6-8-10 spades with 2 spades scores only the flush');
+    assert.deepEqual(r.breakdown, ['Flush for 5']);
+    console.log('PASS  spade flush without the 7 starter stays at 5');
+}
+
+{
     // Stray low pair must not inflate the 6-7-8 run.
     const r = countHand(['6♠', '3♣', '7♣', '8♥'], '3♥');
     assert.equal(r.points, 7, '6-7-8 with a stray 3 pair scores 7, not 10');

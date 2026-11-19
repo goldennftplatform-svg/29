@@ -120,14 +120,19 @@ function pngFixture() {
                 // rounded window, gradient backdrop, elevated cards and buttons.
                 const shell = await page.evaluate(() => {
                     const style = selector => getComputedStyle(document.querySelector(selector));
+                    const src = fragment => document.querySelector(`script[src*="${fragment}"]`)?.src || '';
                     return {
                         bodyImage: style('body').backgroundImage,
                         shellRadius: parseFloat(style('#landing-screen > .pixel-border').borderTopLeftRadius),
                         modeRadius: parseFloat(style('.mode-card').borderTopLeftRadius),
                         modeShadow: style('.mode-card').boxShadow,
-                        buttonRadius: parseFloat(style('#play-ai-btn').borderTopLeftRadius)
+                        buttonRadius: parseFloat(style('#play-ai-btn').borderTopLeftRadius),
+                        engineSrc: src('cribbage-engine.js'),
+                        gameSrc: src('game.js')
                     };
                 });
+                assert.match(shell.engineSrc, /scoring-shell/, 'Scoring engine uses a fresh cache-busting version');
+                assert.match(shell.gameSrc, /scoring-shell/, 'Game UI uses a fresh cache-busting version');
                 assert.match(shell.bodyImage, /gradient/, 'Landing uses a layered gradient app backdrop');
                 assert.ok(shell.shellRadius >= 18, 'Landing window has rounded app-chrome corners');
                 assert.ok(shell.modeRadius >= 12, 'Mode cards use soft app tiles');
