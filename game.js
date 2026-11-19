@@ -86,9 +86,9 @@ class CribbageGame {
         this.lastStatsRoundToken = token;
         this.matchStats.rounds += 1;
         // The crib count rotates the dealer and deals a new hand. Keep the
-        // entries from the hand just counted until that recap has rendered.
-        if (this.pointRecapPending) {
-            this.pointRecapPending = false;
+        // finished round's recap visible, but clear it on the next COUNT click.
+        if (this.pointRecapEntries.length) {
+            this.pointRecapPending = true;
             return;
         }
         this.pointRecapEntries = [];
@@ -153,6 +153,14 @@ class CribbageGame {
         panel.innerHTML = '';
     }
 
+    beginPointRecapRound() {
+        if (!this.pointRecapPending) return;
+        this.pointRecapEntries = [];
+        this.pointRecapRoundToken = this.roundToken(this.engine.getState(this.localPlayerIndex));
+        this.pointRecapPending = false;
+        this.hidePointRecap();
+    }
+
     explainScoringLine(line, kind) {
         const text = String(line || '').toLowerCase();
         if (text.includes('fifteen')) return 'Cards adding to 15 score 2 points.';
@@ -162,7 +170,7 @@ class CribbageGame {
         if (text.includes('run')) return 'Each card in a consecutive run scores 1 point.';
         if (text.includes('flush')) {
             return kind === 'crib'
-                ? 'A crib flush needs all four crib cards plus the starter to match.'
+                ? 'A crib flush needs every crib card plus the starter to match suits.'
                 : 'Four matching suits score 4, or 5 when the starter matches too.';
         }
         if (text.includes('nob')) return 'A Jack matching the starter suit scores 1. The starter cannot score nobs itself.';
@@ -1565,14 +1573,8 @@ class CribbageGame {
     async countHand() {
         if (!this.isSinglePlayer) return this.multiplayerAction('count');
         const recap = [];
-        const startingCount = this.engine.phase === 'COUNT_HAND';
-        const finishingCount = this.engine.phase === 'COUNT_CRIB';
-        if (startingCount) {
-            this.pointRecapEntries = [];
-            this.hidePointRecap();
-        }
+        this.beginPointRecapRound();
         if (this.engine.phase === 'COUNT_HAND' || this.engine.phase === 'COUNT_CRIB') {
-            this.pointRecapPending = finishingCount;
             const r = this.engine.proceedToNextCount();
             const state = this.engine.getState(this.localPlayerIndex);
             if (r.handResult) {
@@ -1770,14 +1772,8 @@ checkAITurn(state) {
 
     async aiCount(ai, aiIndex, aiName, state) {
         const recap = [];
-        const startingCount = state.phase === 'COUNT_HAND';
-        const finishingCount = state.phase === 'COUNT_CRIB';
-        if (startingCount) {
-            this.pointRecapEntries = [];
-            this.hidePointRecap();
-        }
+        this.beginPointRecapRound();
         if (state.phase === 'COUNT_HAND' || state.phase === 'COUNT_CRIB') {
-            this.pointRecapPending = finishingCount;
             const r = this.engine.proceedToNextCount();
             const fresh = this.engine.getState(this.localPlayerIndex);
             if (r.handResult) {

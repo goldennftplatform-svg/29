@@ -275,14 +275,17 @@ function pngFixture() {
                 const recap = await page.evaluate(() => ({
                     hidden: document.getElementById('point-recap').hidden,
                     entries: document.querySelectorAll('.recap-entry').length,
-                    cardCounts: [...document.querySelectorAll('.recap-entry')].map(entry => entry.querySelectorAll('.recap-card').length),
+                    handCardCounts: [...document.querySelectorAll('.recap-entry:not(.crib)')].map(entry => entry.querySelectorAll('.recap-card').length),
+                    cribCardCount: document.querySelector('.recap-entry.crib')?.querySelectorAll('.recap-card').length || 0,
+                    expectedCribCards: window.game.engine.playerCount + 1,
                     explanations: document.querySelectorAll('.recap-lines em').length,
                     toggle: document.getElementById('point-recap-toggle').textContent.trim(),
                     pressed: document.getElementById('point-recap-toggle').getAttribute('aria-pressed')
                 }));
                 assert.equal(recap.hidden, false, 'Counted hands open a point recap');
                 assert.ok(recap.entries >= 2, 'Point recap keeps both the counted hands and crib together');
-                assert.ok(recap.cardCounts.length > 0 && recap.cardCounts.every(count => count === 5), 'Every recap shows four scored cards plus the starter');
+                assert.ok(recap.handCardCounts.length > 0 && recap.handCardCounts.every(count => count === 5), 'Every hand recap shows four scored cards plus the starter');
+                assert.equal(recap.cribCardCount, recap.expectedCribCards, 'Crib recap shows one discarded card per player plus the starter');
                 assert.ok(recap.explanations > 0, 'Point recap teaches what each scoring line means');
                 assert.match(recap.toggle, /RECAP ON/, 'Point recap is on by default');
                 assert.equal(recap.pressed, 'true', 'Recap toggle exposes its state to assistive tech');
