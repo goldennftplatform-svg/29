@@ -34,6 +34,12 @@ class CribbageGame {
         this.statsScoresInitialized = false;
         this.lastMatchMode = '1v1';
         this.lastPlayerName = '';
+
+        // Hand-count point recap. On by default for new players, but it can be
+        // switched off without affecting scoring or settlement.
+        this.recapEnabled = this.loadRecapPreference();
+        this.pointRecapEntries = [];
+        this.pointRecapRoundToken = null;
         
         this.setupNetworkListeners();
     }
@@ -56,15 +62,30 @@ class CribbageGame {
         this.matchResultShown = false;
         this.matchSettlement = null;
         this.statsScoresInitialized = false;
+        this.pointRecapEntries = [];
+        this.pointRecapRoundToken = null;
+        this.hidePointRecap();
         this.updateMatchStatsButton();
+        this.updateRecapToggle();
+    }
+
+    loadRecapPreference() {
+        try { return localStorage.getItem('cribbage_point_recap') !== 'off'; } catch (e) { return true; }
+    }
+
+    roundToken(state) {
+        return (state?.roundStart || state?.scores || []).join('|') + ':' + state?.dealerIndex;
     }
 
     trackRound(state) {
         if (!state || state.phase === 'WAITING') return;
-        const token = (state.roundStart || state.scores || []).join('|') + ':' + state.dealerIndex;
+        const token = this.roundToken(state);
         if (!token || token === this.lastStatsRoundToken) return;
         this.lastStatsRoundToken = token;
         this.matchStats.rounds += 1;
+        this.pointRecapEntries = [];
+        this.pointRecapRoundToken = token;
+        this.hidePointRecap();
     }
 
     getPlayerStats(playerIndex, name) {
@@ -99,6 +120,103 @@ class CribbageGame {
         button.hidden = !hasMatch;
         button.classList.toggle('has-result', Boolean(this.matchResultState));
         button.textContent = this.matchResultState ? '🏆 RESULT · STATS' : '📊 LIVE STATS';
+    }
+
+    updateRecapToggle() {
+        const button = document.getElementById('point-recap-toggle');
+        if (!button) return;
+        button.textContent = this.recapEnabled ? '🧮 RECAP ON' : '🧮 RECAP OFF';
+        button.setAttribute('aria-pressed', String(this.recapEnabled));
+        button.classList.toggle('off', !this.recapEnabled);
+    }
+
+    togglePointRecap() {
+        this.recapEnabled = !this.recapEnabled;
+        try { localStorage.setItem('cribbage_point_recap', this.recapEnabled ? 'on' : 'off'); } catch (e) {}
+        this.updateRecapToggle();
+        if (this.recapEnabled && this.pointRecapEntries.length) this.renderPointRecap();
+        else this.hidePointRecap();
+    }
+
+    hidePointRecap() {
+        const panel = document.getElementById('point-recap');
+        if (!panel) return;
+        panel.hidden = true;
+        panel.innerHTML = '';
+    }
+
+    explainScoringLine(line, kind) {
+        const text = String(line || '').toLowerCase();
+        if (text.includes('fifteen')) return 'Cards adding to 15 score 2 points.';
+        if (text.includes('three of a kind')) return 'Three matching ranks score 6 points.';
+        if (text.includes('four of a kind')) return 'Four matching ranks score 12 points.';
+        if (text.includes('pair')) return 'Two matching ranks score 2 points.';
+        if (text.includes('run')) return 'Each card in a consecutive run scores 1 point.';
+        if (text.includes('flush')) {
+            return kind === 'crib'
+                ? 'A crib flush needs all four crib cards plus the starter to match.'
+                : 'Four matching suits score 4, or 5 when the starter matches too.';
+        }
+        if (text.includes('nob')) return 'A Jack matching the starter suit scores 1. The starter cannot score nobs itself.';
+        if (text.includes('no points')) return 'No scoring combination landed this time.';
+        return 'This combination is counted once for this hand.';
+    }
+
+    renderRecapCard(cardText, isStarter) {
+        const card = Card.fromString(cardText);
+        return `<span class="recap-card ${card.color} ${isStarter ? 'starter' : ''}" title="${this.escapeHtml(cardText)}${isStarter ? ' starter' : ''}">
+            <b>${this.escapeHtml(card.rank)}</b><small>${this.escapeHtml(card.suit)}</small>
+        </span>`;
+    }
+
+    showPointRecap(entries) {
+        if (!Array.isArray(entries) || !entries.length) return;
+        this.pointRecapEntries.push(...entries);
+        if (this.pointRecapEntries.length > 8) this.pointRecapEntries.splice(0, this.pointRecapEntries.length - 8);
+        if (!this.recapEnabled) { this.hidePointRecap(); return; }
+        this.pointRecapRoundToken = this.roundToken(this.engine.getState(this.localPlayerIndex));
+        this.renderPointRecap();
+    }
+
+    renderPointRecap() {
+        const panel = document.getElementById('point-recap');
+        if (!panel) return;
+        if (!this.recapEnabled || !this.pointRecapEntries.length) { this.hidePointRecap(); return; }
+        const total = this.pointRecapEntries.reduce((sum, entry) => sum + (entry.points || 0), 0);
+        panel.innerHTML = `
+            <div class="recap-header">
+                <div>
+                    <span class="recap-badge">✦ POINT RECAP</span>
+                    <h3>Here's where the points came from</h3>
+                </div>
+                <div class="recap-head-actions">
+                    <b>+${total}</b>
+                    <button type="button" class="recap-close" id="recap-close" aria-label="Hide point recap">×</button>
+                </div>
+            </div>
+            <div class="recap-grid">
+                ${this.pointRecapEntries.map(entry => {
+                    const lines = entry.breakdown && entry.breakdown.length ? entry.breakdown : ['No points this time'];
+                    const cards = entry.cards || [];
+                    return `
+                        <article class="recap-entry ${entry.kind || 'hand'}">
+                            <header>
+                                <span class="recap-icon" aria-hidden="true">${entry.kind === 'crib' ? '🧺' : '🃏'}</span>
+                                <div><b>${this.escapeHtml(entry.title)}</b><small>${this.escapeHtml(entry.name)}</small></div>
+                                <strong>+${entry.points || 0}</strong>
+                            </header>
+                            <div class="recap-cards">${cards.map((card, i) => this.renderRecapCard(card, i === cards.length - 1)).join('')}</div>
+                            <ul class="recap-lines">
+                                ${lines.map(line => `<li><span>${this.escapeHtml(line)}</span><em>${this.escapeHtml(this.explainScoringLine(line, entry.kind))}</em></li>`).join('')}
+                            </ul>
+                        </article>
+                    `;
+                }).join('')}
+            </div>
+            <p class="recap-foot">Last card shown is the starter. Turn recap off with the RECAP button above.</p>
+        `;
+        panel.hidden = false;
+        panel.querySelector('#recap-close')?.addEventListener('click', () => this.hidePointRecap());
     }
 
     getMatchBoard(source = null) {
@@ -242,6 +360,7 @@ class CribbageGame {
         try {
             await this.network.connect();
             this.loadPlayerName();
+            this.updateRecapToggle();
             this.loadTables();
         } catch (e) {
             console.error('Failed to connect:', e);
@@ -1437,6 +1556,7 @@ class CribbageGame {
 
     async countHand() {
         if (!this.isSinglePlayer) return this.multiplayerAction('count');
+        const recap = [];
         if (this.engine.phase === 'COUNT_HAND' || this.engine.phase === 'COUNT_CRIB') {
             const r = this.engine.proceedToNextCount();
             const state = this.engine.getState(this.localPlayerIndex);
@@ -1446,6 +1566,14 @@ class CribbageGame {
                 this.addLogEntry(`${who} counted hand: ${desc} (${r.handResult.points} pts)`, 'score');
                 this.recordScoreEvent(state, r.handPlayer, r.handResult.points,
                     r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : `${r.handResult.points} pts`, 'HAND');
+                recap.push({
+                    title: r.handPlayer === this.localPlayerIndex ? 'YOUR HAND' : `${who}'S HAND`,
+                    name: who,
+                    kind: 'hand',
+                    points: r.handResult.points,
+                    breakdown: r.handResult.breakdown,
+                    cards: r.handResult.cards
+                });
             }
             if (r.dealerResult) {
                 const who = this.engine.players[r.dealerPlayer].name;
@@ -1453,6 +1581,14 @@ class CribbageGame {
                 this.addLogEntry(`${who} counted hand: ${desc} (${r.dealerResult.points} pts)`, 'score');
                 this.recordScoreEvent(state, r.dealerPlayer, r.dealerResult.points,
                     r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : `${r.dealerResult.points} pts`, 'HAND');
+                recap.push({
+                    title: "DEALER'S HAND",
+                    name: who,
+                    kind: 'hand',
+                    points: r.dealerResult.points,
+                    breakdown: r.dealerResult.breakdown,
+                    cards: r.dealerResult.cards
+                });
             }
             if (r.cribResult) {
                 const desc = r.cribResult.breakdown.length ? r.cribResult.breakdown.join('; ') : 'no points';
@@ -1461,10 +1597,19 @@ class CribbageGame {
                 this.addLogEntry(`${who} counted crib: ${desc} (${r.cribResult.points} pts)`, 'score');
                 this.recordScoreEvent(state, cribPlayer, r.cribResult.points,
                     r.cribResult.breakdown.length ? 'CRIB: ' + r.cribResult.breakdown.join('; ') : 'no crib points', 'CRIB');
+                recap.push({
+                    title: 'CRIB',
+                    name: who + ' · DEALER',
+                    kind: 'crib',
+                    points: r.cribResult.points,
+                    breakdown: r.cribResult.breakdown,
+                    cards: r.cribResult.cards
+                });
             }
         }
         
         this.broadcastState();
+        this.showPointRecap(recap);
     }
 
     async multiplayerAction(action, payload) {
@@ -1519,6 +1664,7 @@ checkAITurn(state) {
 
         const aiName = state.players[aiIndex]?.name || 'AI';
         const hand = this.engine.hands[aiIndex] || [];
+        let recap = [];
 
         try {
             if (state.phase === 'DISCARD') {
@@ -1526,7 +1672,7 @@ checkAITurn(state) {
             } else if (state.phase === 'PLAY') {
                 await this.aiPlay(ai, aiIndex, aiName, hand, state);
             } else if (state.phase === 'COUNT_HAND' || state.phase === 'COUNT_CRIB') {
-                await this.aiCount(ai, aiIndex, aiName, state);
+                recap = await this.aiCount(ai, aiIndex, aiName, state) || [];
             }
         } catch (e) {
             console.error('AI error:', e);
@@ -1536,6 +1682,7 @@ checkAITurn(state) {
         this.autoAdvancePhase();
         const newState = this.engine.getState(this.localPlayerIndex);
         this.renderGameState(newState);
+        this.showPointRecap(recap);
         this.checkAITurn(newState);
     }
 
@@ -1607,6 +1754,7 @@ checkAITurn(state) {
     }
 
     async aiCount(ai, aiIndex, aiName, state) {
+        const recap = [];
         if (state.phase === 'COUNT_HAND' || state.phase === 'COUNT_CRIB') {
             const r = this.engine.proceedToNextCount();
             const fresh = this.engine.getState(this.localPlayerIndex);
@@ -1616,6 +1764,14 @@ checkAITurn(state) {
                 this.addLogEntry(`${who} counted hand: ${desc} (${r.handResult.points} pts)`, 'score');
                 this.recordScoreEvent(fresh, r.handPlayer, r.handResult.points,
                     r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : `${r.handResult.points} pts`, 'HAND');
+                recap.push({
+                    title: r.handPlayer === this.localPlayerIndex ? 'YOUR HAND' : `${who}'S HAND`,
+                    name: who,
+                    kind: 'hand',
+                    points: r.handResult.points,
+                    breakdown: r.handResult.breakdown,
+                    cards: r.handResult.cards
+                });
             }
             if (r.dealerResult) {
                 const who = this.engine.players[r.dealerPlayer].name;
@@ -1623,6 +1779,14 @@ checkAITurn(state) {
                 this.addLogEntry(`${who} counted hand: ${desc} (${r.dealerResult.points} pts)`, 'score');
                 this.recordScoreEvent(fresh, r.dealerPlayer, r.dealerResult.points,
                     r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : `${r.dealerResult.points} pts`, 'HAND');
+                recap.push({
+                    title: "DEALER'S HAND",
+                    name: who,
+                    kind: 'hand',
+                    points: r.dealerResult.points,
+                    breakdown: r.dealerResult.breakdown,
+                    cards: r.dealerResult.cards
+                });
             }
             if (r.cribResult) {
                 const desc = r.cribResult.breakdown.length ? r.cribResult.breakdown.join('; ') : 'no points';
@@ -1631,10 +1795,19 @@ checkAITurn(state) {
                 this.addLogEntry(`${who} counted crib: ${desc} (${r.cribResult.points} pts)`, 'score');
                 this.recordScoreEvent(fresh, cribPlayer, r.cribResult.points,
                     r.cribResult.breakdown.length ? 'CRIB: ' + r.cribResult.breakdown.join('; ') : 'no crib points', 'CRIB');
+                recap.push({
+                    title: 'CRIB',
+                    name: who + ' · DEALER',
+                    kind: 'crib',
+                    points: r.cribResult.points,
+                    breakdown: r.cribResult.breakdown,
+                    cards: r.cribResult.cards
+                });
             }
         }
 
         // makeAIMove re-renders and drives checkAITurn after this returns.
+        return recap;
     }
 
     addLogEntry(message, type = 'system') {

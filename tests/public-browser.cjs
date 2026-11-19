@@ -269,7 +269,45 @@ function pngFixture() {
                 assert.ok(played > 0, 'Human played cards through the UI');
                 assert.ok(counted > 0, 'Human counted through the UI');
                 assert.equal(await page.evaluate(() => game.engine.phase), 'DISCARD', 'Scoring completes and the next hand is dealt');
+
+                // New players get a plain-language recap of every counted hand
+                // and the crib, and the whole teaching layer can be switched off.
+                const recap = await page.evaluate(() => ({
+                    hidden: document.getElementById('point-recap').hidden,
+                    entries: document.querySelectorAll('.recap-entry').length,
+                    explanations: document.querySelectorAll('.recap-lines em').length,
+                    toggle: document.getElementById('point-recap-toggle').textContent.trim(),
+                    pressed: document.getElementById('point-recap-toggle').getAttribute('aria-pressed')
+                }));
+                assert.equal(recap.hidden, false, 'Counted hands open a point recap');
+                assert.ok(recap.entries > 0, 'Point recap explains the counted hand');
+                assert.ok(recap.explanations > 0, 'Point recap teaches what each scoring line means');
+                assert.match(recap.toggle, /RECAP ON/, 'Point recap is on by default');
+                assert.equal(recap.pressed, 'true', 'Recap toggle exposes its state to assistive tech');
+
                 await page.screenshot({ path: 'public-evidence/' + label + '.png', fullPage: true });
+
+                await page.locator('#point-recap-toggle').click();
+                const recapOff = await page.evaluate(() => ({
+                    enabled: window.game.recapEnabled,
+                    hidden: document.getElementById('point-recap').hidden,
+                    stored: localStorage.getItem('cribbage_point_recap'),
+                    toggle: document.getElementById('point-recap-toggle').textContent.trim()
+                }));
+                assert.equal(recapOff.enabled, false, 'Recap can be disabled');
+                assert.equal(recapOff.hidden, true, 'Disabled recap is hidden immediately');
+                assert.equal(recapOff.stored, 'off', 'Recap preference persists');
+                assert.match(recapOff.toggle, /RECAP OFF/, 'Recap toggle reflects the disabled state');
+
+                await page.locator('#point-recap-toggle').click();
+                const recapOn = await page.evaluate(() => ({
+                    enabled: window.game.recapEnabled,
+                    hidden: document.getElementById('point-recap').hidden,
+                    stored: localStorage.getItem('cribbage_point_recap')
+                }));
+                assert.equal(recapOn.enabled, true, 'Recap can be re-enabled');
+                assert.equal(recapOn.hidden, false, 'Re-enabled recap restores the last teaching panel');
+                assert.equal(recapOn.stored, 'on', 'Re-enabled preference persists');
 
                 // A finished match must not dead-end: verify the result card,
                 // the full stats view, and one-click rematch from the result.

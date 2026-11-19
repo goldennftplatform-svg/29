@@ -66,6 +66,11 @@ function setupEventListeners() {
         game.showLastMatchResult();
     });
 
+    // Point recap is opt-out. The choice persists across reloads.
+    document.getElementById('point-recap-toggle')?.addEventListener('click', () => {
+        game.togglePointRecap();
+    });
+
     // Create table button (on landing)
     document.addEventListener('click', (e) => {
         if (e.target.id === 'create-table-btn') {

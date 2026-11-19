@@ -43,7 +43,7 @@
     <link rel="stylesheet" href="app-layout.css?v=4">
     <link rel="stylesheet" href="wallet-dropdown.css?v=20261118-metamask-network">
     <link rel="stylesheet" href="app-shell.css?v=20261119-glossy-shell">
-    <link rel="stylesheet" href="map-atmosphere.css?v=20261119-living-atlas-results">
+    <link rel="stylesheet" href="map-atmosphere.css?v=20261119-living-atlas-recap">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -215,6 +215,7 @@
                         <span class="stake-badge" id="stake-badge">FREE PLAY</span>
                     </div>
                     <div class="connection-status">
+                        <button type="button" class="match-stats-btn recap-toggle" id="point-recap-toggle" aria-pressed="true" aria-label="Toggle hand point recap">🧮 RECAP ON</button>
                         <button type="button" class="match-stats-btn" id="match-stats-btn" hidden aria-label="Open last match result and statistics">📊 STATS</button>
                         <span class="status-dot" id="status-dot"></span>
                         <span id="status-text">CONNECTING...</span>
@@ -286,6 +287,9 @@
                         </div>
                     </div>
 
+                    <!-- Point Recap: plain-language hand scoring for new players -->
+                    <div class="point-recap" id="point-recap" hidden aria-live="polite"></div>
+
                     <!-- Player Hand (Bottom) -->
                     <div class="player-area">
                         <div class="local-seat" id="local-seat"></div>
@@ -348,10 +352,10 @@
     <script src="config.js?v=20261118-metamask-network"></script>
     <script src="country-boards.js?v=country1"></script>
     <script src="player-profile.js?v=country1"></script>
-    <script src="game.js?v=20261119-scoring-shell-results"></script>
+    <script src="game.js?v=20261119-scoring-shell-recap"></script>
     <script src="network.js?v=20261015-human-tables"></script>
     <script src="cribbage-engine.js?v=20261119-go-pass"></script>
-    <script src="main.js?v=20261119-token-play-results"></script>
+    <script src="main.js?v=20261119-token-play-recap"></script>
     <script src="wallet.js?v=20261119-token-play"></script>
     <script src="metamask.js?v=20261118-metamask-network"></script>
     <script>

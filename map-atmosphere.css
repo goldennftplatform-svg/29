@@ -299,6 +299,218 @@ header.pixel-header {
     background-size: 160px 120px, auto, auto;
 }
 
+/* Point recap ------------------------------------------------------------ */
+.match-stats-btn.recap-toggle {
+    border-color: rgba(115, 227, 171, 0.5);
+    color: #b9f0d2;
+}
+
+.match-stats-btn.recap-toggle.off {
+    border-color: rgba(255, 202, 70, 0.28);
+    color: #98a9bd;
+    opacity: 0.75;
+}
+
+.point-recap {
+    margin: 0 10px 10px;
+    padding: 14px 16px;
+    border: 1px solid rgba(255, 220, 138, 0.32);
+    border-radius: 18px;
+    background:
+        var(--map-grass),
+        radial-gradient(circle at 12% -20%, rgba(255, 202, 70, 0.18), transparent 55%),
+        linear-gradient(160deg, rgba(21, 53, 66, 0.96), rgba(8, 22, 38, 0.97));
+    background-size: 160px 120px, auto, auto;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    animation: resultRise 260ms ease-out;
+}
+
+.point-recap[hidden] { display: none; }
+
+.recap-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.recap-badge {
+    display: inline-block;
+    margin-bottom: 3px;
+    color: #9ee0bd;
+    font-family: system-ui, sans-serif;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+}
+
+.recap-header h3 {
+    margin: 0;
+    color: #fff3c4;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.recap-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.recap-head-actions b {
+    color: #fff1bd;
+    font-family: 'VT323', monospace;
+    font-size: 26px;
+    line-height: 1;
+}
+
+.recap-close {
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(169, 195, 217, 0.28);
+    border-radius: 50%;
+    background: rgba(6, 16, 29, 0.6);
+    color: #bad0e5;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.recap-close:hover { border-color: #ffdc75; color: #ffdc75; }
+
+.recap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 10px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.recap-entry {
+    padding: 11px 12px;
+    border: 1px solid rgba(133, 177, 225, 0.2);
+    border-radius: 14px;
+    background: rgba(6, 17, 31, 0.66);
+}
+
+.recap-entry.crib {
+    border-color: rgba(115, 227, 171, 0.34);
+    background: linear-gradient(160deg, rgba(93, 157, 118, 0.16), rgba(6, 17, 31, 0.7));
+}
+
+.recap-entry header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.recap-icon {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    place-items: center;
+    border-radius: 9px;
+    background: rgba(255, 202, 70, 0.12);
+    font-size: 15px;
+}
+
+.recap-entry header div { flex: 1; min-width: 0; }
+
+.recap-entry header b {
+    display: block;
+    color: #fff1bd;
+    font-family: system-ui, sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+}
+
+.recap-entry header small {
+    display: block;
+    overflow: hidden;
+    color: #9fb8cf;
+    font-family: system-ui, sans-serif;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recap-entry header strong {
+    color: #9ee0bd;
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+}
+
+.recap-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.recap-card {
+    display: inline-flex;
+    min-width: 30px;
+    height: 34px;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    border-radius: 6px;
+    background: linear-gradient(160deg, #fffdf7, #e4eadf);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+}
+
+.recap-card.red { color: #c8324b; }
+.recap-card.black { color: #17202d; }
+.recap-card small { font-size: 12px; }
+
+.recap-card.starter {
+    outline: 2px solid #ffdc75;
+    outline-offset: 1px;
+}
+
+.recap-lines {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.recap-lines li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    padding: 5px 0;
+    border-top: 1px solid rgba(133, 177, 225, 0.1);
+}
+
+.recap-lines span {
+    color: #ffe2a0;
+    font-family: system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.recap-lines em {
+    color: #b7cae0;
+    font-family: system-ui, sans-serif;
+    font-size: 10px;
+    font-style: normal;
+}
+
+.recap-foot {
+    margin: 9px 0 0;
+    color: #8fa9c2;
+    font-family: system-ui, sans-serif;
+    font-size: 9px;
+    text-align: center;
+}
+
 /* Match result + field stats -------------------------------------------- */
 .match-stats-btn {
     margin-right: 10px;
@@ -688,5 +900,6 @@ header.pixel-header {
     body::before,
     body::after,
     .result-card,
-    .result-aurora { animation: none !important; }
+    .result-aurora,
+    .point-recap { animation: none !important; }
 }
