@@ -139,6 +139,38 @@ function req(method, api, { body, token } = {}) {
     const stats = await req('GET', 'admin/stats', { token: 'test-admin-token' });
     ok('admin stats: 2 matches, $0.60 generation, fees < 1% of gen', stats.body.matches.total === 2 && stats.body.economy.generationPts === 60 && stats.body.economy.feesPts === 0.3 && stats.body.economy.feesPts < stats.body.economy.generationPts * 0.01, stats.body.economy.feesPts + ' fees / ' + stats.body.economy.generationPts + ' gen');
 
+    // 8) Token AI play uses a real, capped, house-funded opponent account.
+    const bankBefore = await req('GET', 'games/ai-bankroll', { token: aliceToken });
+    ok('AI bankroll is a funded custody account with a display address',
+        bankBefore.status === 200 && bankBefore.body.ai.credits >= 20 && !!bankBefore.body.ai.address && bankBefore.body.ai.capPts >= 200,
+        bankBefore.body.ai.credits + ' pts · ' + bankBefore.body.ai.address);
+    ok('token match stake is disclosed in test-LTC terms',
+        bankBefore.body.stake.entryPoints === 20 && bankBefore.body.stake.potPoints === 40 && bankBefore.body.stake.testLtcPerEntry === 0.02);
+
+    const humanBeforeMatch = (await req('GET', 'auth/me', { token: aliceToken })).body.user.credits;
+    const fundedAi = await req('POST', 'games/ai-match', { token: aliceToken, body: {} });
+    ok('AI token match escrows both human and bankroll',
+        fundedAi.status === 200 && fundedAi.body.match.players.length === 2 && fundedAi.body.match.pot === 40 && fundedAi.body.ai.id,
+        'pot ' + fundedAi.body.match.pot);
+    const aiWins = await req('POST', 'games/match/' + fundedAi.body.match.id + '/resolve', {
+        token: aliceToken, body: { winnerId: fundedAi.body.ai.id }
+    });
+    ok('AI bankroll can really win the escrowed pot',
+        aiWins.status === 200 && aiWins.body.match.winner === fundedAi.body.ai.id && aiWins.body.match.winnerRole === 'ai' && aiWins.body.match.fee === 0.2 && aiWins.body.match.payout === 39.8,
+        'payout ' + aiWins.body.match.payout);
+    const humanAfterMatch = (await req('GET', 'auth/me', { token: aliceToken })).body.user.credits;
+    ok('human loses exactly the 20-pt stake when AI wins', humanAfterMatch === humanBeforeMatch - 20, humanAfterMatch + ' pts');
+    const bankAfter = await req('GET', 'games/ai-bankroll', { token: aliceToken });
+    ok('AI bankroll receives the settlement (net +19.8 after 0.2 house fee)',
+        bankAfter.body.ai.credits === bankBefore.body.ai.credits + 19.8,
+        bankAfter.body.ai.credits + ' pts');
+    ok('house subsidy is capped and did not silently top up after a win',
+        bankAfter.body.ai.subsidyPts === bankBefore.body.ai.subsidyPts && bankAfter.body.ai.remainingSubsidyPts === bankAfter.body.ai.capPts - bankAfter.body.ai.subsidyPts);
+    const tokenAiDup = await req('POST', 'games/match/' + fundedAi.body.match.id + '/resolve', {
+        token: aliceToken, body: { winnerId: fundedAi.body.ai.id }
+    });
+    ok('AI match cannot be settled twice', tokenAiDup.status === 409, 'status ' + tokenAiDup.status);
+
     server.close();
     fs.unlinkSync(process.env.LITECRIB_STORE_FILE);
     fs.unlinkSync(process.env.LITECRIB_MATCH_FILE);

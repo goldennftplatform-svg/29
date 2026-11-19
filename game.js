@@ -19,6 +19,9 @@ class CribbageGame {
         this.lastPegBefore = {};      // playerIndex -> score BEFORE its most recent scoring event
         this.lastRenderedPegs = {};   // playerIndex -> score at last board render (for pop anims)
         this.lastBoardRoundToken = null;
+        // Server-escrowed AI match. Null = free play.
+        this.stakedMatch = null;
+        this.stakedMatchSettled = false;
         
         this.setupNetworkListeners();
     }
@@ -143,6 +146,7 @@ class CribbageGame {
             ]);
             return;
         }
+        this.clearStakedMatch();
         this.isSinglePlayer = false;
         this.aiPlayers.clear();
         this.tableId = result.tableId;
@@ -150,6 +154,107 @@ class CribbageGame {
         // Keep the host in the lobby with their published seat visible until
         // the opponent joins. A playable server snapshot opens the game.
         this.hideModal();
+    }
+
+    clearStakedMatch() {
+        this.stakedMatch = null;
+        this.stakedMatchSettled = false;
+        const badge = document.getElementById('stake-badge');
+        if (badge) {
+            badge.textContent = 'FREE PLAY';
+            badge.classList.remove('staked');
+        }
+        const status = document.getElementById('status-text');
+        if (status && status.textContent === 'TOKEN MATCH') status.textContent = 'LOCAL GAME';
+    }
+
+    startStakedAiMatch(data, playerName) {
+        const match = data && data.match;
+        if (!match || !match.players || match.players.length !== 2) {
+            this.showModal('TOKEN MATCH ERROR', '<p>The escrow response was incomplete. No cards were dealt.</p>', [
+                { text: 'OK', action: () => this.hideModal() }
+            ]);
+            return;
+        }
+        this.clearStakedMatch();
+        this.stakedMatch = {
+            id: match.id,
+            humanId: match.players[0].id,
+            aiId: match.players[1].id,
+            stake: data.stake || null,
+            ai: data.ai || null
+        };
+        const stake = data.stake || { entryPoints: 20, potPoints: 40, feePoints: 0.1, winnerPoints: 39.9, testLtcPerEntry: 0.02 };
+        const badge = document.getElementById('stake-badge');
+        if (badge) {
+            badge.textContent = '🪙 ' + stake.entryPoints + ' TEST PTS / ' + stake.testLtcPerEntry + ' tLTC';
+            badge.classList.add('staked');
+        }
+        this.isSinglePlayer = true;
+        this.aiPlayers.clear();
+        this.setupLocalGame('1v1', playerName);
+        // joinLocalGame() labels local games, so re-apply the stake label after it.
+        const status = document.getElementById('status-text');
+        if (status) status.textContent = 'TOKEN MATCH';
+        this.addLogEntry('Token match armed: ' + stake.entryPoints + ' test pts each. Winner takes ' + stake.winnerPoints + ' pts.', 'system');
+        this.addLogEntry('AI bankroll: ' + (data.ai ? data.ai.credits + ' pts · ' + data.ai.address : 'funded custody account'), 'system');
+        this.showModal('YOU ARE PLAYING FOR TOKENS', `
+            <p><strong>Stake:</strong> ${stake.entryPoints} test pts (${stake.testLtcPerEntry} tLTC) each.</p>
+            <p><strong>Pot:</strong> ${stake.potPoints} pts · <strong>House fee:</strong> ${stake.feePoints} pts · <strong>Winner gets:</strong> ${stake.winnerPoints} pts.</p>
+            <p>The AI opponent is funded from a capped house bankroll and can actually win. Test tokens have no cash value.</p>
+        `, [{ text: 'DEAL CARDS', action: () => this.hideModal(), class: 'primary' }]);
+    }
+
+    async finishStakedMatch(state, force = false) {
+        if (!this.stakedMatch) return;
+        if (this.stakedMatchSettled && !force) return;
+        if (state.phase !== 'GAME_OVER' || state.winner == null) return;
+        this.stakedMatchSettled = true;
+
+        const winnerId = state.winner === 0 ? this.stakedMatch.humanId
+            : state.winner === 1 ? this.stakedMatch.aiId : null;
+        if (!winnerId) return;
+
+        // Staked play is only enabled when wallet.js sees this same-origin relay.
+        // Using config.relayUrl here would send the local session token to prod.
+        const relay = String(window.location.origin).replace(/\/$/, '');
+        let token = '';
+        try { token = localStorage.getItem('litecrib_auth_token') || ''; } catch (e) {}
+        if (!token) return;
+
+        try {
+            const response = await fetch(relay + '/api/games/match/' + encodeURIComponent(this.stakedMatch.id) + '/resolve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ winnerId })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error((result && result.error) || 'settlement failed');
+
+            const match = result.match;
+            const humanWon = match.winnerRole ? match.winnerRole !== 'ai' : match.winner === this.stakedMatch.humanId;
+            const cfg = window.LITECRIB_CONFIG || {};
+            const perLtc = (cfg.pricing && cfg.pricing.pointsPerTestLtc) || cfg.pointsPerTestLtc || 1000;
+            const tLtc = (match.payout / perLtc).toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+            this.addLogEntry(humanWon
+                ? 'Settled: you won ' + match.payout + ' test pts (' + tLtc + ' tLTC). House fee ' + match.fee + ' pts.'
+                : 'Settled: AI bankroll won ' + match.payout + ' pts. House fee ' + match.fee + ' pts.', 'system');
+            window.dispatchEvent(new CustomEvent('litecrib:settled', { detail: result }));
+            this.showModal('MATCH SETTLED', `
+                <p><strong>${humanWon ? 'YOU WON' : 'AI BANKROLL WON'}</strong></p>
+                <p>Pot ${match.pot} pts · house fee ${match.fee} pts · payout ${match.payout} pts${humanWon ? ' (' + tLtc + ' tLTC)' : ''}.</p>
+                <p>Your LITEcrib credit balance has been updated on the server.</p>
+            `, [{ text: 'OK', action: () => this.hideModal(), class: 'primary' }]);
+        } catch (e) {
+            this.stakedMatchSettled = false;
+            this.showModal('SETTLEMENT PENDING', `
+                <p>The game finished, but the server could not record the result: ${this.escapeHtml(e.message || 'network error')}.</p>
+                <p>Keep this page open and retry. The escrow stays on the server until it settles.</p>
+            `, [
+                { text: 'RETRY', class: 'primary', action: () => this.finishStakedMatch(state, true) },
+                { text: 'CLOSE', action: () => this.hideModal() }
+            ]);
+        }
     }
 
     setupLocalGame(mode, playerName) {
@@ -204,6 +309,7 @@ class CribbageGame {
         }
 
         this.savePlayerName(name);
+        this.clearStakedMatch();
         this.isSinglePlayer = false;
         this.aiPlayers.clear();
         const result = await this.network.joinTable(tableId, name);
@@ -292,6 +398,9 @@ class CribbageGame {
 
         // Update play dashboard
         this.renderPlayDashboard(state);
+
+        // A staked game settles from the real winner, never from a guess.
+        if (state.phase === 'GAME_OVER') this.finishStakedMatch(state);
     }
 
     buildBoardGeo() {

@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-title" content="LITEcrib">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦁</text></svg>">
     <title>LITEcrib — Free 8-Bit Cribbage on LitVM</title>
-    <meta name="description" content="Play free 8-bit cribbage in your browser: live 1v1 and 3-player tables, solo AI, and a LitVM testnet wallet. No download.">
+    <meta name="description" content="Play 8-bit cribbage free in your browser, or connect a LITEcrib wallet for 20-point test-token matches against a funded AI bankroll. Live human tables too.">
     <meta name="author" content="LITEcrib">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://29.aisp.live/">
@@ -19,7 +19,7 @@
     <meta property="og:url" content="https://29.aisp.live/">
     <meta property="og:site_name" content="LITEcrib">
     <meta property="og:title" content="LITEcrib — Free 8-Bit Cribbage on LitVM">
-    <meta property="og:description" content="Live 1v1 and 3-player cribbage tables, solo AI, and a testnet LitVM wallet. Play free in your browser, no download.">
+    <meta property="og:description" content="Live 1v1 and 3-player cribbage tables, solo AI, and optional 20-point test-token matches. Free in your browser, no download.">
     <meta property="og:image" content="https://29.aisp.live/social-preview.png?v=1">
     <meta property="og:image:secure_url" content="https://29.aisp.live/social-preview.png?v=1">
     <meta property="og:image:type" content="image/png">
@@ -31,14 +31,14 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:url" content="https://29.aisp.live/">
     <meta name="twitter:title" content="LITEcrib — Free 8-Bit Cribbage on LitVM">
-    <meta name="twitter:description" content="Live 1v1 and 3-player cribbage tables, solo AI, and a testnet LitVM wallet. Play free in your browser, no download.">
+    <meta name="twitter:description" content="Live 1v1 and 3-player cribbage tables, solo AI, and optional 20-point test-token matches. Free in your browser, no download.">
     <meta name="twitter:image" content="https://29.aisp.live/social-preview.png?v=1">
     <meta name="twitter:image:alt" content="Pixel-art cribbage cards and a scoring board beside the LITEcrib logo and 29.aisp.live">
 
     <script type="application/ld+json">
-    {"@context":"https://schema.org","@type":"VideoGame","name":"LITEcrib","description":"Free browser cribbage with live 1v1 and 3-player tables, solo AI, and a LitVM testnet wallet.","url":"https://29.aisp.live/","image":"https://29.aisp.live/social-preview.png?v=1","gamePlatform":"Web browser","applicationCategory":"Game","operatingSystem":"Any","playMode":["SinglePlayer","MultiPlayer"],"inLanguage":"en","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock","url":"https://29.aisp.live/"},"publisher":{"@type":"Organization","name":"LITEcrib","url":"https://29.aisp.live/"}}
+    {"@context":"https://schema.org","@type":"VideoGame","name":"LITEcrib","description":"Browser cribbage with live 1v1 and 3-player tables, solo AI, and optional 20-point test-token matches against a funded AI bankroll.","url":"https://29.aisp.live/","image":"https://29.aisp.live/social-preview.png?v=1","gamePlatform":"Web browser","applicationCategory":"Game","operatingSystem":"Any","playMode":["SinglePlayer","MultiPlayer"],"inLanguage":"en","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock","url":"https://29.aisp.live/"},"publisher":{"@type":"Organization","name":"LITEcrib","url":"https://29.aisp.live/"}}
     </script>
-    <link rel="stylesheet" href="styles.css?v=20261006-nav">
+    <link rel="stylesheet" href="styles.css?v=20261119-token-play">
     <link rel="stylesheet" href="safari-brand.css?v=country1">
     <link rel="stylesheet" href="app-layout.css?v=4">
     <link rel="stylesheet" href="wallet-dropdown.css?v=4">
@@ -58,6 +58,14 @@
                     <p class="tagline">LITECOIN-POWERED 8-BIT CRIBBAGE</p>
                     <button type="button" class="header-wallet-link" id="wallet-toggle" aria-expanded="false" aria-controls="wallet-menu">WALLET <span aria-hidden="true">▾</span></button>
                 </header>
+
+                <div class="stake-banner" id="stake-banner" role="status">
+                    <span class="stake-coin" aria-hidden="true">🪙</span>
+                    <div>
+                        <strong id="stake-title">FREE PLAY — OR PLAY FOR TEST TOKENS</strong>
+                        <p id="stake-copy">Sign in to the LITEcrib wallet to stake 20 test pts (0.02 tLTC) per 1v1 AI match. Test coins have no cash value.</p>
+                    </div>
+                </div>
                 
                 <div class="mode-selector">
                     <h2>SELECT GAME MODE</h2>
@@ -81,7 +89,7 @@
                             <span class="btn-icon">🤖</span>
                             <span>PLAY VS AI</span>
                         </button>
-                        <p class="ai-hint">Instant game, no waiting!</p>
+                        <p class="ai-hint">Signed in? Stake 20 test pts (0.02 tLTC) vs a funded AI bankroll. Otherwise it's free.</p>
                     </div>
                 </div>
 
@@ -130,7 +138,7 @@
                     </section>
                     <button type="button" class="wallet-dropdown-claim" id="claim-tokens-btn" disabled>CLAIM TEST zkLTC</button>
                     <p class="wallet-dropdown-hint" id="claim-status" role="status">Sign in to check your faucet status.</p>
-                    <p class="wallet-dropdown-hint">Email sign-in creates a test wallet on LiteForge. Test coins have no cash value and are separate from LITEcrib game credits.</p>
+                    <p class="wallet-dropdown-hint">Email sign-in creates a test wallet on LiteForge. Sign in to the LITEcrib credit wallet below to stake those credits in token matches. Test coins have no cash value.</p>
                     <div class="wallet-dropdown-links">
                         <a href="wallet-setup.html">FULL VIEW ↗</a>
                         <a href="https://docs.litvm.com/get-started-on-testnet/add-to-wallet" target="_blank" rel="noopener noreferrer">NETWORK GUIDE ↗</a>
@@ -149,7 +157,7 @@
                         <button class="pixel-btn" id="wallet-refresh-btn">REFRESH</button>
 
                         <div class="sso-box" id="sso-box">
-                            <div class="sso-login" id="sso-login">
+                            <div class="sso-login" id="sso-login-box">
                                 <div class="wallet-addr-label">LITEcrib ACCOUNT</div>
                                 <input class="sso-input" id="sso-email" type="email" placeholder="you@email.com" autocomplete="email">
                                 <input class="sso-input" id="sso-pass" type="password" placeholder="password" autocomplete="current-password">
@@ -170,7 +178,7 @@
                                 <div class="provider-choice" id="provider-choice"></div>
                                 <div class="hand-actions">
                                     <button class="pixel-btn secondary" id="pts-claim">CLAIM POINTS</button>
-                                    <button class="pixel-btn" id="pts-play">PLAY AI (20 PTS)</button>
+                                    <button class="pixel-btn" id="pts-play">PLAY AI FOR 20 PTS</button>
                                 </div>
                                 <div class="wallet-addr-label">FEES I GENERATED</div>
                                 <div class="wallet-tip" id="pts-fees">—</div>
@@ -191,6 +199,7 @@
                     <div class="table-info">
                         <span class="table-id" id="table-id-display">TABLE #001</span>
                         <span class="mode-badge" id="mode-badge">1v1</span>
+                        <span class="stake-badge" id="stake-badge">FREE PLAY</span>
                     </div>
                     <div class="connection-status">
                         <span class="status-dot" id="status-dot"></span>
@@ -325,11 +334,11 @@
     <script src="config.js?v=20261015-human-tables"></script>
     <script src="country-boards.js?v=country1"></script>
     <script src="player-profile.js?v=country1"></script>
-    <script src="game.js?v=20261015-human-tables"></script>
+    <script src="game.js?v=20261119-token-play"></script>
     <script src="network.js?v=20261015-human-tables"></script>
     <script src="cribbage-engine.js?v=20260920-startup"></script>
-    <script src="main.js?v=20261015-human-tables"></script>
-    <script src="wallet.js?v=20261006-static"></script>
+    <script src="main.js?v=20261119-token-play"></script>
+    <script src="wallet.js?v=20261119-token-play"></script>
     <script>
         (function () {
             var toggle = document.getElementById('wallet-toggle');

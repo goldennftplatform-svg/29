@@ -29,6 +29,11 @@ function normalize(u) {
     if (!Array.isArray(u.ledger)) u.ledger = [];
     if (typeof u.feeGeneratedPts !== 'number' || !isFinite(u.feeGeneratedPts)) u.feeGeneratedPts = 0;
     if (typeof u.totalGenerationPts !== 'number' || !isFinite(u.totalGenerationPts)) u.totalGenerationPts = 0;
+    // House-funded AI bankroll: a real credit account with a capped subsidy.
+    // These fields are server-only; publicUser() deliberately omits them.
+    if (typeof u.isHouse !== 'boolean') u.isHouse = false;
+    if (typeof u.houseSubsidyPts !== 'number' || !isFinite(u.houseSubsidyPts)) u.houseSubsidyPts = 0;
+    if (typeof u.bankrollCapPts !== 'number' || !isFinite(u.bankrollCapPts)) u.bankrollCapPts = 0;
     return u;
 }
 

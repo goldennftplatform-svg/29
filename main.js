@@ -22,17 +22,39 @@ function setupEventListeners() {
         });
     });
 
-    // Play vs AI button
-    document.getElementById('play-ai-btn')?.addEventListener('click', () => {
+    // Play vs AI button — a signed-in LITEcrib account stakes real credits in
+    // the server ledger against the funded AI bankroll. No account = free play.
+    document.getElementById('play-ai-btn')?.addEventListener('click', async () => {
         const name = document.getElementById('player-name').value.trim().toUpperCase();
         if (!name) {
             game.showModal('ERROR', 'Enter your name first!', [{ text: 'OK', action: () => game.hideModal() }]);
             return;
         }
         game.savePlayerName(name);
-        
+
         // Default to 1v1 for AI play, but use selected mode if available
         const mode = document.querySelector('.mode-card.selected')?.dataset.mode || '1v1';
+        const wallet = window.LITEcribWallet;
+        if (wallet && wallet.isConnected()) {
+            if (mode !== '1v1') {
+                game.showModal('TOKEN MATCH IS 1V1',
+                    '<p>The funded AI bankroll plays head-to-head token matches. Select <strong>HEAD-TO-HEAD</strong>, then press PLAY VS AI.</p>',
+                    [{ text: 'OK', action: () => game.hideModal() }]);
+                return;
+            }
+            const result = await wallet.createAiMatch();
+            if (!result.ok) {
+                game.showModal('TOKEN STAKE FAILED', `<p>${game.escapeHtml(result.error || 'Could not start the match.')}</p>`, [
+                    { text: 'OK', action: () => game.hideModal() }
+                ]);
+                return;
+            }
+            game.startStakedAiMatch(result.data, name);
+            wallet.status('STAKED — WINNER TAKES ' + result.data.stake.winnerPoints + ' TEST PTS');
+            return;
+        }
+
+        game.clearStakedMatch();
         game.isSinglePlayer = true;
         game.aiPlayers.clear();
         game.setupLocalGame(mode, name);

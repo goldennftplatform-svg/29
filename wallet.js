@@ -20,6 +20,8 @@
     var providers = null;
     var me = null;
     var muted = false;
+    var aiInfo = null;
+    var stakeInfo = null;
 
     function base() {
         var loc = window.location;
@@ -122,12 +124,12 @@
     }
 
     function showAccountView() {
-        $('sso-login').hidden = true;
+        $('sso-login-box').hidden = true;
         $('sso-account').hidden = false;
     }
 
     function showLoginView() {
-        $('sso-login').hidden = false;
+        $('sso-login-box').hidden = false;
         $('sso-account').hidden = true;
     }
 
@@ -142,6 +144,45 @@
     function usdOf(pts) {
         if (!pricing || !pts) return '$0.00';
         return '$' + (pts / pricing.pointsPerUsd).toFixed(2);
+    }
+
+    function testLtcOf(pts) {
+        var perLtc = (pricing && pricing.pointsPerTestLtc) || 1000;
+        return (pts / perLtc).toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+    }
+
+    // Make the stake impossible to miss before a token game starts.
+    function updateStakeBanner() {
+        var title = $('stake-title'), copy = $('stake-copy'), badge = $('stake-badge');
+        var entry = stakeInfo ? stakeInfo.entryPoints : ((pricing && pricing.minPvpEntryPoints) || 20);
+        var testLtc = stakeInfo ? stakeInfo.testLtcPerEntry : testLtcOf(entry);
+        var shortAddr = '';
+        if (aiInfo && aiInfo.address) shortAddr = aiInfo.address.slice(0, 6) + '…' + aiInfo.address.slice(-4);
+
+        if (me && getToken()) {
+            if (title) title.textContent = 'TOKEN PLAY ACTIVE';
+            if (copy) copy.textContent = 'AI matches stake ' + entry + ' test pts (' + testLtc + ' tLTC). Winner takes the pot minus the 0.5% house fee.'
+                + (aiInfo ? ' AI bankroll ' + aiInfo.credits + ' pts · ' + shortAddr : '');
+            if (badge) {
+                badge.textContent = '🪙 ' + entry + ' TEST PTS';
+                badge.classList.add('staked');
+            }
+        } else {
+            if (title) title.textContent = 'FREE PLAY — OR PLAY FOR TEST TOKENS';
+            if (copy) copy.textContent = 'Sign in to the LITEcrib wallet to stake ' + entry + ' test pts (' + testLtc + ' tLTC) per 1v1 AI match. Test coins have no cash value.';
+            if (badge) {
+                badge.textContent = 'FREE PLAY';
+                badge.classList.remove('staked');
+            }
+        }
+    }
+
+    async function refreshBankroll() {
+        var data = await authed('/api/games/ai-bankroll');
+        if (!data || !data.success) return;
+        aiInfo = data.ai;
+        stakeInfo = data.stake;
+        updateStakeBanner();
     }
 
     function renderBalance(pts) {
@@ -183,6 +224,7 @@
         if (!data || !data.success) return false;
         me = data.user;
         renderBalance(data.user.credits);
+        updateStakeBanner();
         var addr = $('sso-acct-addr');
         if (addr) addr.textContent = data.user.address || '\u2014';
         renderProviders();
@@ -191,6 +233,7 @@
         if (f && fees && fees.success) {
             f.textContent = usdOf(fees.totalGenerationPts || 0) + ' played \u00B7 ' + usdOf(fees.totalFeesPts || 0) + ' fees (' + fees.games.length + ' games)';
         }
+        refreshBankroll(); // bankroll is funding detail; don't hold login on it
         return true;
     }
 
@@ -207,7 +250,7 @@
         setToken(data.token);
         showAccountView();
         await refreshAccount();
-        setLast('WELCOME ' + (data.user.email || '') + ' — one account, one custody wallet');
+        setLast('WELCOME ' + (data.user.email || '') + ' — token play is ON. AI matches stake ' + ((pricing && pricing.minPvpEntryPoints) || 20) + ' test pts');
     }
 
     async function initAccount() {
@@ -232,23 +275,35 @@
             : 'NO NEW tLTC — send coins to your credit address first');
     }
 
-    async function runPlay() {
-        setLast('MATCHMAKING...');
-        var m = await authed('/api/games/match', {
+    // Creates the escrowed match but does NOT fake the result. The game engine
+    // settles it with the real winner when the 121-point game finishes.
+    async function createAiMatch() {
+        if (!me || !getToken()) return { ok: false, needsLogin: true, error: 'Sign in to the LITEcrib wallet first' };
+        var data = await authed('/api/games/ai-match', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ mode: 'ai' })
         });
-        if (!m || !m.success) { setLast((m && m.error) || 'MATCH FAILED'); return; }
-        var r = await authed('/api/games/match/' + m.match.id + '/resolve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
-        });
-        if (!r || !r.success) { setLast((r && r.error) || 'SETTLE FAILED'); return; }
-        renderBalance(me ? me.credits : 0);
-        setLast('POT ' + r.match.pot + ' pts \u00B7 HOUSE FEE ' + r.match.fee + ' pts \u00B7 YOU GOT ' + r.match.payout + '');
-        await refreshAccount();
+        if (!data || !data.success) {
+            return { ok: false, error: (data && data.error) || 'Could not stake the match' };
+        }
+        aiInfo = data.ai || aiInfo;
+        stakeInfo = data.stake || stakeInfo;
+        updateStakeBanner();
+        return { ok: true, data: data };
+    }
+
+    async function runPlay() {
+        if (!me || !getToken()) { setLast('SIGN IN TO PLAY FOR TOKENS'); return; }
+        setLast('FUNDING 1V1 AI MATCH...');
+        var result = await createAiMatch();
+        if (!result.ok) { setLast(result.error || 'MATCH FAILED'); return; }
+        if (!window.game || !window.game.startStakedAiMatch) {
+            setLast('GAME NOT READY — TRY AGAIN');
+            return;
+        }
+        window.game.startStakedAiMatch(result.data);
+        setLast('STAKED — WINNER TAKES ' + result.data.stake.winnerPoints + ' PTS (' + testLtcOf(result.data.stake.winnerPoints) + ' tLTC)');
     }
 
     async function runExport() {
@@ -264,7 +319,26 @@
         setLast('SEED EXPORTED — keep it secret, keep it safe');
     }
 
+    // Shared with main.js/game.js so token play only starts from a verified
+    // relay account. Nothing here can settle a match; that stays server-side.
+    window.LITEcribWallet = {
+        isConnected: function () { return !!(me && getToken()); },
+        createAiMatch: createAiMatch,
+        refresh: refreshAccount,
+        status: setLast
+    };
+    window.addEventListener('litecrib:settled', function (event) {
+        var result = event && event.detail && event.detail.match;
+        refreshAccount();
+        if (result) {
+            setLast(result.winnerRole === 'ai'
+                ? 'AI WON THE POT — house took ' + result.fee + ' pts'
+                : 'YOU WON ' + result.payout + ' PTS (' + testLtcOf(result.payout) + ' tLTC)');
+        }
+    });
+
     async function init() {
+        updateStakeBanner();
         if (!cfg.features || !cfg.features.paymentsEnabled) return;
         if (!relayAvailable()) {
             // Static hosting: hide the relay-only panel instead of probing

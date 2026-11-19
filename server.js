@@ -24,6 +24,7 @@
 'use strict';
 
 const http = require('http');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -227,6 +228,67 @@ function isAdmin(req) {
     return !!ADMIN && bearer(req) === ADMIN;
 }
 
+// The AI opponent is a real credit account, not a scripted "you won" result.
+// It has its own custody address and a capped house subsidy, so wins and losses
+// are settled from an actual (test-token-denominated) bankroll.
+const AI_EMAIL = String(process.env.LITECRIB_AI_EMAIL || 'ai-bankroll@litecrib.local').toLowerCase();
+function positiveNum(raw, dflt) {
+    const n = Number(raw);
+    return (isFinite(n) && n > 0) ? n : dflt;
+}
+const AI_BANKROLL_TARGET_PTS = pricing.r2(positiveNum(process.env.LITECRIB_AI_BANKROLL_PTS, 200));
+const AI_BANKROLL_CAP_PTS = pricing.r2(Math.max(
+    AI_BANKROLL_TARGET_PTS,
+    positiveNum(process.env.LITECRIB_AI_BANKROLL_CAP_PTS, 1000)
+));
+
+function aiBankrollInfo(ai) {
+    return {
+        id: ai.id,
+        label: 'LITEcrib AI BANKROLL',
+        address: ai.address,
+        credits: pricing.r2(ai.credits || 0),
+        testLtc: pricing.r2((ai.credits || 0) / pricing.pointsPerTestLtc),
+        capPts: AI_BANKROLL_CAP_PTS,
+        subsidyPts: pricing.r2(ai.houseSubsidyPts || 0),
+        remainingSubsidyPts: pricing.r2(Math.max(0, AI_BANKROLL_CAP_PTS - (ai.houseSubsidyPts || 0)))
+    };
+}
+
+function ensureAiBankroll() {
+    let ai = store.findByEmail(AI_EMAIL);
+    if (!ai) {
+        // registerUser issues a real BIP39 custody wallet and persists it.
+        const registered = auth.registerUser(AI_EMAIL, crypto.randomBytes(24).toString('hex'), 'house');
+        ai = store.getUser(registered.user.id);
+    }
+    if (!ai.isHouse) {
+        ai.isHouse = true;
+        ai.houseLabel = 'LITEcrib AI BANKROLL';
+        store.updateUser(ai.id);
+    }
+    if (!ai.bankrollCapPts) {
+        ai.bankrollCapPts = AI_BANKROLL_CAP_PTS;
+        store.updateUser(ai.id);
+    }
+
+    // Refill only from the remaining capped subsidy. Once the cap is spent the
+    // house stops funding the opponent, so the bankroll can genuinely bust.
+    const shortfall = pricing.r2(Math.max(0, AI_BANKROLL_TARGET_PTS - (ai.credits || 0)));
+    const available = pricing.r2(Math.max(0, AI_BANKROLL_CAP_PTS - (ai.houseSubsidyPts || 0)));
+    const topUp = pricing.r2(Math.min(shortfall, available));
+    if (topUp > 0) {
+        ai.credits = pricing.r2((ai.credits || 0) + topUp);
+        ai.houseSubsidyPts = pricing.r2((ai.houseSubsidyPts || 0) + topUp);
+        store.ledgerPush(ai, {
+            at: Date.now(), type: 'house-bankroll', pts: topUp,
+            note: 'house-funded AI bankroll (' + pricing.r2(ai.houseSubsidyPts) + '/' + AI_BANKROLL_CAP_PTS + ' pts used)'
+        });
+        store.updateUser(ai.id);
+    }
+    return ai;
+}
+
 function matchToJson(m) {
     return {
         id: m.id,
@@ -238,17 +300,23 @@ function matchToJson(m) {
         settledAt: m.settledAt,
         players: m.players.map((p) => ({ id: p.id, name: p.name, escrow: p.escrow })),
         winner: m.winner,
+        winnerRole: m.winnerRole || null,
         fee: m.fee,
         payout: m.payout
     };
 }
 
+function playerLabel(u) {
+    if (!u) return 'PLAYER';
+    return u.isHouse ? 'LITEcrib AI' : u.email;
+}
+
 function escrowMatch(host, opponent, mode) {
     const entry = pricing.minPvpEntryPoints;
-    const players = [{ id: host.id, name: host.email, escrow: entry }];
+    const players = [{ id: host.id, name: playerLabel(host), escrow: entry, role: 'human' }];
     let pot = pricing.r2(entry);
     if (opponent) {
-        players.push({ id: opponent.id, name: opponent.email, escrow: entry });
+        players.push({ id: opponent.id, name: playerLabel(opponent), escrow: entry, role: opponent.isHouse ? 'ai' : 'human' });
         pot = pricing.r2(entry * 2);
     }
     const match = {
@@ -283,6 +351,7 @@ function settleMatch(match, winnerId) {
     const payout = pricing.r2(pot - fee);
     match.state = 'settled';
     match.winner = winnerId;
+    match.winnerRole = winner.role || 'human';
     match.fee = fee;
     match.payout = payout;
     match.settledAt = Date.now();
@@ -713,6 +782,64 @@ const server = http.createServer((req, res) => {
             });
         }).catch((e) => {
             sendJson(res, 502, { success: false, error: e.message });
+        });
+        return;
+    }
+
+    // ---- API: funded AI bankroll + token AI matches ---------------------------
+    // The AI account is a normal credit account with its own custody address.
+    // This endpoint makes the stake and the opponent's ability to pay visible.
+    if (p === '/api/games/ai-bankroll' && req.method === 'GET') {
+        const user = requireUser(req);
+        if (!user) {
+            sendJson(res, 401, { success: false, error: 'unauthorized' });
+            return;
+        }
+        const ai = ensureAiBankroll();
+        sendJson(res, 200, {
+            success: true,
+            ai: aiBankrollInfo(ai),
+            stake: {
+                entryPoints: pricing.minPvpEntryPoints,
+                potPoints: pricing.r2(pricing.minPvpEntryPoints * 2),
+                feePoints: pricing.feeForPot(pricing.r2(pricing.minPvpEntryPoints * 2)),
+                testLtcPerEntry: pricing.r2(pricing.minPvpEntryPoints / pricing.pointsPerTestLtc)
+            }
+        });
+        return;
+    }
+
+    if (p === '/api/games/ai-match' && req.method === 'POST') {
+        const user = requireUser(req);
+        if (!user) {
+            sendJson(res, 401, { success: false, error: 'unauthorized' });
+            return;
+        }
+        readBody(req).then(() => {
+            const ai = ensureAiBankroll();
+            const entry = pricing.minPvpEntryPoints;
+            if (pricing.r2(user.credits) < entry) {
+                sendJson(res, 402, { success: false, error: 'need ' + entry + ' test pts to play a token match' });
+                return;
+            }
+            if (pricing.r2(ai.credits) < entry) {
+                sendJson(res, 503, { success: false, error: 'AI bankroll is empty — house subsidy cap reached' });
+                return;
+            }
+            const match = escrowMatch(user, ai, 'ai');
+            sendJson(res, 200, {
+                success: true,
+                match: matchToJson(match),
+                ai: aiBankrollInfo(ai),
+                stake: {
+                    entryPoints: entry,
+                    potPoints: match.pot,
+                    feePoints: pricing.feeForPot(match.pot),
+                    winnerPoints: pricing.r2(match.pot - pricing.feeForPot(match.pot)),
+                    testLtcPerEntry: pricing.r2(entry / pricing.pointsPerTestLtc)
+                },
+                pricing: pricing.public()
+            });
         });
         return;
     }

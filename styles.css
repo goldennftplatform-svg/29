@@ -2061,3 +2061,66 @@ header.pixel-header::before {
     font-size: 13px;
     font-weight: bold;
 }
+
+/* Token play disclosure — the stake is visible before and during the game. */
+.stake-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 14px 0 16px;
+    padding: 12px 14px;
+    border: 3px solid var(--lite-gold);
+    border-radius: 8px;
+    background: linear-gradient(180deg, #16324d, #0d1b2a);
+    box-shadow: 4px 4px 0 var(--lite-black);
+    color: var(--lite-white);
+}
+.stake-coin {
+    display: grid;
+    place-items: center;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    border: 2px solid var(--lite-gold);
+    border-radius: 50%;
+    background: #10131c;
+    font-size: 22px;
+}
+.stake-banner strong {
+    display: block;
+    margin-bottom: 3px;
+    color: var(--lite-gold);
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    line-height: 1.5;
+    letter-spacing: .5px;
+}
+.stake-banner p {
+    margin: 0;
+    font-family: 'VT323', monospace;
+    font-size: 15px;
+    line-height: 1.25;
+}
+.stake-badge {
+    display: inline-block;
+    padding: 5px 9px;
+    border: 2px solid #8fa5b8;
+    border-radius: 999px;
+    background: #10131c;
+    color: #c7d7e5;
+    font-family: 'VT323', monospace;
+    font-size: 13px;
+    letter-spacing: .5px;
+}
+.stake-badge.staked {
+    border-color: var(--lite-gold);
+    background: var(--lite-gold);
+    color: var(--lite-black);
+    font-weight: bold;
+}
+@media (max-width: 620px) {
+    .stake-banner { align-items: flex-start; padding: 10px; }
+    .stake-coin { flex-basis: 34px; width: 34px; height: 34px; font-size: 18px; }
+    .stake-banner strong { font-size: 8px; }
+    .stake-banner p { font-size: 14px; }
+}

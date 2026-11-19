@@ -114,6 +114,11 @@ function pngFixture() {
                 await page.locator('#wallet-toggle').click();
                 assert.equal(await page.locator('#wallet-menu').isVisible(), true, 'Wallet dropdown opens from the main page');
                 assert.equal(await page.locator('#wallet-menu a[href="wallet-setup.html"]').isVisible(), true, 'Testnet wallet setup CTA is offered');
+                // Token play is disclosed before the first click, even on static
+                // hosting where account staking is unavailable.
+                assert.equal(await page.locator('#stake-banner').isVisible(), true, 'Stake disclosure is visible in the lobby');
+                assert.match(await page.locator('#stake-copy').innerText(), /20 test pts|test pts/, 'Stake amount is explained');
+                assert.equal(await page.locator('#stake-badge').innerText(), 'FREE PLAY', 'Static visitors see free play, not token play');
                 await page.locator('#wallet-toggle').click();
                 // Social/share metadata is part of the public product: a link shared
                 // on X/Twitter must carry the large 1200x630 card image.
