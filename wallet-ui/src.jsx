@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { PrivyProvider, usePrivy, useWallets, useCreateWallet, useSendTransaction } from '@privy-io/react-auth';
-import { defineChain, createPublicClient, http, formatEther, encodeFunctionData, toHex } from 'viem';
+import { PrivyProvider, usePrivy, useWallets, useCreateWallet, useSendTransaction, useExportWallet } from '@privy-io/react-auth';
+import { defineChain, createPublicClient, http, formatEther, parseEther, isAddress, getAddress, encodeFunctionData, toHex } from 'viem';
 
 const chain = defineChain({
     id: 4441,
@@ -44,6 +44,7 @@ function Wallet() {
     const { wallets, ready: walletsReady } = useWallets();
     const { createWallet } = useCreateWallet();
     const { sendTransaction } = useSendTransaction();
+    const { exportWallet } = useExportWallet();
     const wallet = wallets.find(w => w.walletClientType === 'privy');
     const address = wallet?.address;
     const [balance, setBalance] = useState(null);
@@ -62,6 +63,9 @@ function Wallet() {
     const [transaction, setTransaction] = useState(null);
     const [confirmedDeposit, setConfirmedDeposit] = useState(null);
     const [deployedAddress, setDeployedAddress] = useState(null);
+    const [recipient, setRecipient] = useState('');
+    const [amount, setAmount] = useState('');
+    const [review, setReview] = useState(null);
     const deployMode = new URLSearchParams(location.search).get('deploy') === '1';
 
     useEffect(() => {
@@ -142,6 +146,53 @@ function Wallet() {
         setRefresh(n => n+1);
     }
 
+    function queueSend(event) {
+        event.preventDefault(); setError(''); setNotice('');
+        if (!address || !wallet) throw new Error('Wallet is not ready');
+        const to = recipient.trim();
+        if (!isAddress(to, { strict: false })) throw new Error('Enter a valid 0x EVM wallet address.');
+        const normalized = getAddress(to);
+        if (normalized.toLowerCase() === address.toLowerCase()) throw new Error('Choose a different wallet — this is your own address.');
+        if (/^0x0{40}$/i.test(normalized)) throw new Error('Do not send to the zero address.');
+        let value;
+        try { value = parseEther(amount.trim()); }
+        catch (e) { throw new Error('Enter a valid zkLTC amount with up to 18 decimals.'); }
+        if (value <= 0n) throw new Error('Amount must be greater than zero.');
+        setReview({ address: normalized, amount: amount.trim(), value });
+    }
+
+    async function sendCoins() {
+        if (!address || !wallet || !review) throw new Error('Wallet is not ready');
+        await wallet.switchChain(chain.id);
+        const provider = await wallet.getEthereumProvider();
+        if (Number(await provider.request({ method: 'eth_chainId' })) !== chain.id || await client.getChainId() !== chain.id) throw new Error('Switch to LiteForge before sending');
+        const [currentBalance, gas, gasPrice] = await boundedRead(() => Promise.all([
+            client.getBalance({ address }),
+            client.estimateGas({ account: address, to: review.address, value: review.value }),
+            client.getGasPrice()
+        ]));
+        // 20% gas buffer keeps a max-style send from failing when gas moves.
+        const needed = review.value + gas * gasPrice * 120n / 100n;
+        if (needed > currentBalance) throw new Error('Not enough test zkLTC for this amount plus network gas.');
+        const { hash } = await sendTransaction({
+            to: review.address,
+            value: toHex(review.value),
+            chainId: chain.id
+        }, { address, uiOptions: { showWalletUIs: true } });
+        const sent = review;
+        setTransaction(hash); setReview(null); setRecipient(''); setAmount('');
+        setNotice('Transfer submitted. Waiting for chain confirmation…');
+        const receipt = await client.waitForTransactionReceipt({ hash, timeout: 120000 });
+        if (receipt.status !== 'success') throw new Error('Transfer reverted; check the transaction before trying again.');
+        setNotice(`Sent ${sent.amount} test zkLTC. The wallet balance will refresh now.`);
+        setRefresh(n => n + 1);
+    }
+
+    function secureExport() {
+        if (!address) throw new Error('Wallet is not ready');
+        return exportWallet({ address });
+    }
+
     useEffect(() => {
         const timer = setTimeout(() => setSlow(true), 15000);
         return () => clearTimeout(timer);
@@ -195,6 +246,24 @@ function Wallet() {
                 <h2>Your LiteForge wallet</h2>
                 <p className="address" id="evm-address">{address}</p>
                 <div className="balance">{balance === null ? (loadingBalance ? 'Checking balance…' : 'Balance unavailable') : formatEther(balance) + ' test zkLTC'}</div>
+                <h3>Send test zkLTC</h3>
+                <p>Send LiteForge test coins to another EVM wallet on chain 4441. A small amount of test gas is reserved automatically.</p>
+                {!review ? <form className="wallet-send-form" onSubmit={(event) => action(() => queueSend(event))}>
+                    <label>Recipient address
+                        <input className="wallet-input" value={recipient} onChange={e => setRecipient(e.target.value)} placeholder="0x..." spellCheck="false" autoComplete="off" />
+                    </label>
+                    <label>Amount (test zkLTC)
+                        <input className="wallet-input" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.01" inputMode="decimal" autoComplete="off" />
+                    </label>
+                    <button type="submit" disabled={busy || !wallet}>Review send</button>
+                </form> : <div className="wallet-send-review">
+                    <p><strong>Confirm transfer</strong></p>
+                    <p className="address">{review.address}</p>
+                    <p>Amount: <strong>{review.amount} test zkLTC</strong></p>
+                    <p className="hint">Check the address carefully. Testnet transfers cannot be reversed.</p>
+                    <button disabled={busy} onClick={() => action(() => sendCoins())}>Confirm &amp; send</button>
+                    <button className="secondary" disabled={busy} onClick={() => setReview(null)}>Cancel</button>
+                </div>}
                 <h3>Testnet practice game</h3>
                 <p>Deposit 0.001 test zkLTC, play against AI, then refund your deposit. No house fee, winnings, or real money. Transactions use a small amount of test gas.</p>
                 {!deployment?.address ? <p>Practice payments are awaiting contract deployment.</p> : <>
@@ -211,7 +280,9 @@ function Wallet() {
                     <button disabled={busy} onClick={() => action(async () => { await navigator.clipboard.writeText(address); setNotice('Address copied. Paste it into the faucet.'); })}>Copy address</button>
                     <button className="secondary" disabled={loadingBalance || loadingDeposit} onClick={() => setRefresh(n => n + 1)}>Refresh balance</button>
                     <button className="secondary" disabled={busy} onClick={() => action(async () => { await wallet.switchChain(chain.id); setNotice('Wallet switched to LiteForge (4441).'); })}>Use LiteForge network</button>
+                    <button className="secondary" disabled={busy} onClick={() => action(() => secureExport())}>Export private key</button>
                 </div>
+                <p className="hint">Export opens Privy’s secure key window on a separate domain. LITEcrib never sees or stores your private key. Whoever has it can spend the wallet — never share it.</p>
                 <h3>Get free test coins</h3>
                 <p>Copy your address, open the official faucet, and complete its claim steps. Return here to see your balance refresh. Test coins have no cash value.</p>
                 <a className="button" href="https://faucet.testnet.liteforge.zeeve.net/" target="_blank" rel="noopener noreferrer">Get test zkLTC ↗</a>

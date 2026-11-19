@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="styles.css?v=20261006-nav">
     <link rel="stylesheet" href="safari-brand.css?v=country1">
     <link rel="stylesheet" href="app-layout.css?v=4">
-    <link rel="stylesheet" href="wallet-dropdown.css?v=3">
+    <link rel="stylesheet" href="wallet-dropdown.css?v=4">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -313,7 +313,7 @@
                 toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
                 if (!open || loaded) return;
                 loaded = true;
-                import('./wallet-assets/wallet.js?v=liteforge-zeeve-20261116').catch(function () {
+                import('./wallet-assets/wallet.js?v=wallet-send-export-20261118').catch(function () {
                     var root = document.getElementById('wallet-root');
                     if (root) {
                         root.textContent = 'Wallet sign-in could not load. Reload shortly, or use FULL VIEW.';

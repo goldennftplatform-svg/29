@@ -19,6 +19,9 @@
         .steps { padding-left: 25px; } .done { color: #92efbe; }
         .address { overflow-wrap: anywhere; padding: 12px; background: #0b1429; border-radius: 8px; }
         .balance { font-size: 1.4rem; overflow-wrap: anywhere; }
+        .wallet-send-form label { display: block; margin: 10px 0; font-size: 14px; color: #b6c9e6; }
+        .wallet-input { display: block; width: 100%; min-height: 46px; margin-top: 5px; padding: 10px 12px; border: 1px solid #5f7fae; border-radius: 9px; background: #0b1429; color: #ecf2ff; font: 15px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
+        .wallet-send-review { padding: 12px; border: 1px solid #8fbaff; border-radius: 10px; background: #0f1f3d; }
         .hint { color: #b6c9e6; font-size: 14px; }
         [role=alert] { color: #ffb9b9; overflow-wrap: anywhere; }
         @media (max-width: 480px) { main { padding: 14px; margin: 12px auto; } section { padding: 16px; } }
@@ -35,7 +38,7 @@
     <noscript>Enable JavaScript to set up your wallet.</noscript>
 </main>
 <script type="module">
-    import('./wallet-assets/wallet.js?v=liteforge-zeeve-20261116').catch(() => {
+    import('./wallet-assets/wallet.js?v=wallet-send-export-20261118').catch(() => {
         const root = document.getElementById('wallet-root');
         root.textContent = 'Wallet sign-in could not load. Please reload shortly. You can still return to the game.';
         root.setAttribute('role', 'alert');

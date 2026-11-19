@@ -80,6 +80,20 @@
 }
 #wallet-menu #wallet-root .balance { font-size: 1.2rem; overflow-wrap: anywhere; }
 #wallet-menu #wallet-root .hint { color: #b6c9e6; font-size: 12px; }
+#wallet-menu #wallet-root .wallet-send-form label { display: block; margin: 10px 0; font-size: 12px; color: #b6c9e6; }
+#wallet-menu #wallet-root .wallet-input {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    margin-top: 5px;
+    padding: 9px 10px;
+    border: 1px solid #5f7fae;
+    border-radius: 8px;
+    background: #0b1429;
+    color: #ecf2ff;
+    font: 13px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+#wallet-menu #wallet-root .wallet-send-review { padding: 10px; border: 1px solid #8fbaff; border-radius: 9px; background: #0f1f3d; }
 #wallet-menu #wallet-root [role="alert"] { color: #ffb9b9; overflow-wrap: anywhere; }
 #wallet-menu #wallet-root button,
 #wallet-menu #wallet-root .button {
