@@ -284,4 +284,138 @@ function hasNumericKey(values, key) {
     console.log('PASS  AI run evaluation matches the real scorer');
 }
 
+// --- Match must stop at 121 ---------------------------------------------------
+{
+    // A 15 that reaches 121 during play used to fall through to GO and then
+    // reopen COUNT_HAND, letting the loser score after the game was over.
+    const e = makeEngine();
+    e.phase = 'PLAY';
+    e.dealerIndex = 1;
+    e.currentPlayerIndex = 0;
+    e.playCount = 13;
+    e.playPile = [
+        { card: Card.fromString('10♣'), player: 1 },
+        { card: Card.fromString('3♦'), player: 0 }
+    ];
+    e.hands[0] = hand(['2♣']);
+    e.hands[1] = hand([]);
+    e.scores = [119, 50];
+
+    const r = e.playCard(0, 0);
+    assert.equal(r.success, true);
+    assert.equal(r.scoreResult.points, 2, '2♣ at 13 completes a 15');
+    assert.equal(e.scores[0], 121, 'The winning 15 is the last score of the match');
+    assert.equal(e.winner, 0);
+    assert.equal(e.phase, 'GAME_OVER', 'Winning play must not reopen hand counting');
+    assert.equal(r.gameOver, true);
+    const before = [...e.scores];
+    const late = e.proceedToNextCount();
+    assert.deepEqual(e.scores, before, 'No hand may be counted after a play-phase win');
+    assert.equal(late.phase, 'GAME_OVER');
+    console.log('PASS  winning play stops before GO or hand counting');
+}
+
+{
+    // A GO point can also reach 121. The old code closed the count afterwards,
+    // turning a finished game back into COUNT_HAND when all cards were played.
+    const e = makeEngine();
+    e.phase = 'PLAY';
+    e.dealerIndex = 1;
+    e.currentPlayerIndex = 1;
+    e.playCount = 28;
+    e.lastPlayIndex = 0;
+    e.goCount = 1;
+    e.playPile = [
+        { card: Card.fromString('10♣'), player: 0 },
+        { card: Card.fromString('10♦'), player: 1 },
+        { card: Card.fromString('8♥'), player: 0 }
+    ];
+    e.hands[0] = hand([]);
+    e.hands[1] = hand([]);
+    e.scores = [120, 50];
+
+    const r = e.sayGo(1);
+    assert.equal(r.success, true);
+    assert.equal(e.scores[0], 121, 'The GO point that wins is the final score');
+    assert.equal(e.winner, 0);
+    assert.equal(e.phase, 'GAME_OVER', 'Winning GO must not reopen hand counting');
+    assert.equal(r.gameOver, true);
+    const before = [...e.scores];
+    e.proceedToNextCount();
+    assert.deepEqual(e.scores, before, 'No hand may be counted after a GO win');
+    console.log('PASS  GO that reaches 121 does not reopen hand counting');
+}
+
+{
+    const e = makeEngine();
+    e.winner = 0;
+    e.scores = [121, 80];
+    e.awardPoints(1, 7, 'late phantom points');
+    assert.deepEqual(e.scores, [121, 80], 'awardPoints is a no-op once a winner exists');
+    console.log('PASS  no points can be awarded after a winner is recorded');
+}
+
+{
+    // Ten seeded full games: every score must come from a real award, and no
+    // award may land after the winner is recorded.
+    const originalRandom = Math.random;
+    let seed = 0x1a2b3c4d;
+    Math.random = () => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return seed / 0x100000000;
+    };
+
+    try {
+        for (let game = 1; game <= 10; game++) {
+            const e = makeEngine();
+            e.startGame();
+            const ais = [new CribbageAI('medium'), new CribbageAI('hard')];
+            const originalAward = e.awardPoints.bind(e);
+            const awards = [];
+            let winnerIndex = null;
+            e.awardPoints = (playerIndex, points, reason) => {
+                assert.equal(winnerIndex, null,
+                    `Game ${game}: ${points} points (${reason}) were awarded after the winner was decided`);
+                originalAward(playerIndex, points, reason);
+                awards.push({ playerIndex, points });
+                if (e.winner !== null) winnerIndex = e.winner;
+            };
+
+            let steps = 0;
+            while (e.phase !== 'GAME_OVER' && steps++ < 5000) {
+                const phase = e.phase;
+                const idx = e.currentPlayerIndex;
+                if (phase === 'DISCARD') {
+                    const discards = ais[idx].chooseDiscard(e.hands[idx], idx === e.dealerIndex, e.starter, 2);
+                    assert.equal(e.discardToCrib(idx, discards.sort((a, b) => b - a)).success, true);
+                } else if (phase === 'STARTER') {
+                    e.startPlayPhase();
+                } else if (phase === 'PLAY') {
+                    const hand = e.hands[idx];
+                    if (ais[idx].shouldSayGo(hand, e.playCount)) {
+                        assert.equal(e.sayGo(idx).success, true);
+                    } else {
+                        const cardIndex = ais[idx].choosePlayCard(hand, e.playCount, e.playPile);
+                        assert.ok(cardIndex >= 0, 'AI must choose a legal card');
+                        assert.equal(e.playCard(idx, cardIndex).success, true);
+                    }
+                } else if (phase === 'COUNT_HAND' || phase === 'COUNT_CRIB') {
+                    assert.ok(e.proceedToNextCount(), 'counting must progress');
+                } else {
+                    throw new Error(`Game ${game}: unexpected phase ${phase}`);
+                }
+            }
+
+            assert.equal(e.phase, 'GAME_OVER', `Game ${game} must finish`);
+            assert.ok(winnerIndex !== null, `Game ${game} must record a winner`);
+            const sums = [0, 0];
+            awards.forEach(a => { sums[a.playerIndex] += a.points; });
+            assert.deepEqual(e.scores, sums, `Game ${game}: every point must trace to an award`);
+        }
+    } finally {
+        Math.random = originalRandom;
+    }
+    console.log('PASS  10 seeded full games stop at 121 with no late scoring');
+}
+
 console.log('all cribbage scoring assertions passed');

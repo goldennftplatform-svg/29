@@ -229,18 +229,62 @@ class CribbageEngine {
         this.lastPlayIndex = playerIndex;
         this.goCount = 0;
 
-        // Check for scoring
+        // Check for scoring. Capture GO before endPlayRound() clears the pile;
+        // otherwise the flag is computed from an empty table and is wrong.
         const scoreResult = this.scorePlay(this.playPile);
-        
+        const go = !this.canAnyonePlay() && this.playCount < 31;
+
+        // The match is over the instant a score reaches 121. Do not close the
+        // count, award GO, or hand the turn to anyone after a winning play.
+        if (this.winner !== null) {
+            return {
+                success: true,
+                playPile: this.playPile,
+                playCount: this.playCount,
+                scores: [...this.scores],
+                pegs: this.pegs.map(p => [...p]),
+                currentPlayer: this.currentPlayerIndex,
+                scoreResult,
+                go: false,
+                gameOver: true
+            };
+        }
+
         // Check for 31 or GO
         if (this.playCount === 31) {
             this.awardPoints(playerIndex, 2, '31 for 2');
+            if (this.winner !== null) {
+                return {
+                    success: true,
+                    playPile: this.playPile,
+                    playCount: this.playCount,
+                    scores: [...this.scores],
+                    pegs: this.pegs.map(p => [...p]),
+                    currentPlayer: this.currentPlayerIndex,
+                    scoreResult,
+                    go: false,
+                    gameOver: true
+                };
+            }
             this.endPlayRound();
         } else if (this.canAnyonePlay()) {
             this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.playerCount;
         } else {
             // No one can play - GO
             this.awardPoints(this.lastPlayIndex, 1, 'GO');
+            if (this.winner !== null) {
+                return {
+                    success: true,
+                    playPile: this.playPile,
+                    playCount: this.playCount,
+                    scores: [...this.scores],
+                    pegs: this.pegs.map(p => [...p]),
+                    currentPlayer: this.currentPlayerIndex,
+                    scoreResult,
+                    go: true,
+                    gameOver: true
+                };
+            }
             this.endPlayRound();
         }
 
@@ -252,7 +296,8 @@ class CribbageEngine {
             pegs: this.pegs.map(p => [...p]),
             currentPlayer: this.currentPlayerIndex,
             scoreResult,
-            go: !this.canAnyonePlay() && this.playCount < 31
+            go,
+            gameOver: this.winner !== null
         };
     }
 
@@ -267,6 +312,10 @@ class CribbageEngine {
     }
 
     endPlayRound() {
+        if (this.winner !== null) {
+            this.phase = 'GAME_OVER';
+            return;
+        }
         // Capture the last player BEFORE resetting it; otherwise every new
         // count would start at player 0 after a 31 or a GO.
         const nextPlayerIndex = this.lastPlayIndex < 0
@@ -311,13 +360,24 @@ class CribbageEngine {
             if (this.lastPlayIndex >= 0) {
                 this.awardPoints(this.lastPlayIndex, 1, 'GO');
             }
+            // A GO point can win the game. Never fall through to endPlayRound(),
+            // which would rotate into hand counting after the match is over.
+            if (this.winner !== null) {
+                return {
+                    success: true,
+                    currentPlayer: this.currentPlayerIndex,
+                    goCount: this.goCount,
+                    gameOver: true
+                };
+            }
             this.endPlayRound();
         }
 
         return {
             success: true,
             currentPlayer: this.currentPlayerIndex,
-            goCount: this.goCount
+            goCount: this.goCount,
+            gameOver: this.winner !== null
         };
     }
 
@@ -383,6 +443,9 @@ class CribbageEngine {
     }
 
     countHand(playerIndex, isCrib = false) {
+        if (this.winner !== null) {
+            return { points: 0, breakdown: [], cards: [] };
+        }
         // Nobs must be judged against the four hand/crib cards only; the starter
         // cannot be its own "Jack of the starter suit".
         const heldCards = this.countedHands[playerIndex] || this.hands[playerIndex] || [];
@@ -521,6 +584,9 @@ class CribbageEngine {
     }
 
     awardPoints(playerIndex, points, reason) {
+        // A match ends the instant somebody reaches 121. Late points from a
+        // hand/crib count or a stale play callback must never move the score.
+        if (this.winner !== null) return;
         this.scores[playerIndex] += points;
         this.updatePegs(playerIndex);
         this.logScore(playerIndex, points, reason);
@@ -546,6 +612,9 @@ class CribbageEngine {
     }
 
     proceedToNextCount() {
+        if (this.winner !== null) {
+            return { phase: 'GAME_OVER', currentPlayer: this.currentPlayerIndex, gameOver: true };
+        }
         if (this.phase === 'COUNT_HAND') {
             // Count current player's hand
             const handWho = this.currentPlayerIndex;

@@ -137,7 +137,7 @@ function pngFixture() {
                         mapSrc: document.querySelector('link[href*="map-atmosphere.css"]')?.href || ''
                     };
                 });
-                assert.match(shell.engineSrc, /hand-cards/, 'Scoring engine uses a fresh cache-busting version');
+                assert.match(shell.engineSrc, /stop-at-121/, 'Scoring engine uses a fresh cache-busting version');
                 assert.match(shell.gameSrc, /scoring-shell/, 'Game UI uses a fresh cache-busting version');
                 assert.match(shell.mainSrc, /token-play/, 'Entry point uses a fresh cache-busting version');
                 assert.match(shell.mapSrc, /living-atlas/, 'Living-atlas layer uses a fresh cache-busting version');
