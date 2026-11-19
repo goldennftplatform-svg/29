@@ -43,7 +43,7 @@
     <link rel="stylesheet" href="app-layout.css?v=4">
     <link rel="stylesheet" href="wallet-dropdown.css?v=20261118-metamask-network">
     <link rel="stylesheet" href="app-shell.css?v=20261119-glossy-shell">
-    <link rel="stylesheet" href="map-atmosphere.css?v=20261119-living-atlas-recap">
+    <link rel="stylesheet" href="map-atmosphere.css?v=20261119-living-atlas-activity3">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -287,9 +287,6 @@
                         </div>
                     </div>
 
-                    <!-- Point Recap: plain-language hand scoring for new players -->
-                    <div class="point-recap" id="point-recap" hidden aria-live="polite"></div>
-
                     <!-- Player Hand (Bottom) -->
                     <div class="player-area">
                         <div class="local-seat" id="local-seat"></div>
@@ -316,11 +313,38 @@
                     <span class="phase-sub" id="phase-sub"></span>
                 </div>
 
-                <!-- Chat / Log -->
+                <!-- Game activity: compact teaser in the lower-left rail, full
+                     hand breakdown laid over the table when opened. -->
                 <details class="game-log" id="game-log">
-                    <summary class="log-header">Game activity</summary>
-                    <div class="log-messages" id="log-messages"></div>
+                    <summary class="log-header">Game activity <span>Last hands &amp; scoring</span></summary>
+                    <div class="activity-sheet">
+                        <div class="activity-sheet-head">
+                            <div>
+                                <span class="recap-badge">✦ GAME ACTIVITY</span>
+                                <h3>Last hands &amp; scoring</h3>
+                            </div>
+                            <button type="button" class="activity-close" id="activity-close" aria-label="Close game activity">×</button>
+                        </div>
+                        <div class="activity-body">
+                            <section class="activity-feed" aria-label="Live game log">
+                                <h4>LIVE LOG</h4>
+                                <div class="log-messages" id="log-messages"></div>
+                            </section>
+                            <section class="activity-recap" aria-label="Point recap">
+                                <div class="point-recap" id="point-recap" hidden aria-live="polite"></div>
+                                <p class="recap-empty" id="recap-empty">Count a hand to see exactly where the points came from.</p>
+                            </section>
+                        </div>
+                    </div>
                 </details>
+                <div class="recap-teaser" id="recap-teaser" hidden>
+                    <button type="button" id="recap-teaser-btn" aria-label="Open game activity and point recap">
+                        <span class="teaser-icon" aria-hidden="true">🧮</span>
+                        <span class="teaser-copy"><b>POINT RECAP</b><small id="recap-teaser-copy">Last hands ready</small></span>
+                        <strong id="recap-teaser-total">+0</strong>
+                        <span class="teaser-arrow" aria-hidden="true">↗</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -352,10 +376,10 @@
     <script src="config.js?v=20261118-metamask-network"></script>
     <script src="country-boards.js?v=country1"></script>
     <script src="player-profile.js?v=country1"></script>
-    <script src="game.js?v=20261119-scoring-shell-recap4"></script>
+    <script src="game.js?v=20261119-scoring-shell-activity"></script>
     <script src="network.js?v=20261015-human-tables"></script>
     <script src="cribbage-engine.js?v=20261119-hand-cards"></script>
-    <script src="main.js?v=20261119-token-play-recap"></script>
+    <script src="main.js?v=20261119-token-play-activity2"></script>
     <script src="wallet.js?v=20261119-token-play"></script>
     <script src="metamask.js?v=20261118-metamask-network"></script>
     <script>

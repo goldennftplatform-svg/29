@@ -71,6 +71,22 @@ function setupEventListeners() {
         game.togglePointRecap();
     });
 
+    // The lower-left recap teaser opens the same overlay as Game activity.
+    document.getElementById('recap-teaser-btn')?.addEventListener('click', () => {
+        const log = document.getElementById('game-log');
+        if (!log) return;
+        log.open = true;
+    });
+    document.getElementById('activity-close')?.addEventListener('click', () => {
+        const log = document.getElementById('game-log');
+        if (log) log.open = false;
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        const log = document.getElementById('game-log');
+        if (log?.open) log.open = false;
+    });
+
     // Create table button (on landing)
     document.addEventListener('click', (e) => {
         if (e.target.id === 'create-table-btn') {

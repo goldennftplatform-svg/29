@@ -148,9 +148,24 @@ class CribbageGame {
 
     hidePointRecap() {
         const panel = document.getElementById('point-recap');
-        if (!panel) return;
-        panel.hidden = true;
-        panel.innerHTML = '';
+        if (panel) {
+            panel.hidden = true;
+            panel.innerHTML = '';
+        }
+        const teaser = document.getElementById('recap-teaser');
+        if (teaser) teaser.hidden = true;
+        const empty = document.getElementById('recap-empty');
+        if (empty) empty.hidden = false;
+    }
+
+    updateRecapTeaser(total, count) {
+        const teaser = document.getElementById('recap-teaser');
+        if (!teaser) return;
+        const copy = document.getElementById('recap-teaser-copy');
+        const totalEl = document.getElementById('recap-teaser-total');
+        if (copy) copy.textContent = count === 1 ? '1 hand scored · tap to review' : `${count} hands scored · tap to review`;
+        if (totalEl) totalEl.textContent = `+${total}`;
+        teaser.hidden = false;
     }
 
     beginPointRecapRound() {
@@ -199,6 +214,9 @@ class CribbageGame {
         if (!panel) return;
         if (!this.recapEnabled || !this.pointRecapEntries.length) { this.hidePointRecap(); return; }
         const total = this.pointRecapEntries.reduce((sum, entry) => sum + (entry.points || 0), 0);
+        this.updateRecapTeaser(total, this.pointRecapEntries.length);
+        const empty = document.getElementById('recap-empty');
+        if (empty) empty.hidden = true;
         panel.innerHTML = `
             <div class="recap-header">
                 <div>
@@ -207,7 +225,7 @@ class CribbageGame {
                 </div>
                 <div class="recap-head-actions">
                     <b>+${total}</b>
-                    <button type="button" class="recap-close" id="recap-close" aria-label="Hide point recap">×</button>
+                    <button type="button" class="recap-close" id="recap-close" aria-label="Close game activity">×</button>
                 </div>
             </div>
             <div class="recap-grid">
@@ -232,7 +250,10 @@ class CribbageGame {
             <p class="recap-foot">Last card shown is the starter. Turn recap off with the RECAP button above.</p>
         `;
         panel.hidden = false;
-        panel.querySelector('#recap-close')?.addEventListener('click', () => this.hidePointRecap());
+        panel.querySelector('#recap-close')?.addEventListener('click', () => {
+            const log = document.getElementById('game-log');
+            if (log) log.open = false;
+        });
     }
 
     getMatchBoard(source = null) {

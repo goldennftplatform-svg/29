@@ -511,6 +511,163 @@ header.pixel-header {
     text-align: center;
 }
 
+/* Lower-left recap teaser + activity overlay ----------------------------- */
+.recap-teaser { margin: 0 8px 8px; align-self: start; }
+.recap-teaser[hidden], .recap-empty[hidden] { display: none; }
+
+.recap-teaser button {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid rgba(115, 227, 171, 0.42);
+    border-radius: 14px;
+    background:
+        var(--map-grass),
+        linear-gradient(120deg, rgba(18, 56, 52, 0.94), rgba(9, 26, 40, 0.96));
+    background-size: 140px 100px, auto;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    color: #dbe9ff;
+    cursor: pointer;
+    text-align: left;
+    transition: transform 160ms ease, border-color 160ms ease;
+}
+
+.recap-teaser button:hover {
+    border-color: #9ee0bd;
+    transform: translateY(-2px);
+}
+
+.teaser-icon {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+    place-items: center;
+    border-radius: 10px;
+    background: rgba(255, 202, 70, 0.14);
+    font-size: 16px;
+}
+
+.teaser-copy { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.teaser-copy b { color: #9ee0bd; font-size: 10px; letter-spacing: 0.12em; }
+.teaser-copy small { color: #a9c0dd; font-size: 10px; }
+.teaser-copy small, .teaser-copy b { font-family: system-ui, sans-serif; }
+
+.recap-teaser strong {
+    color: #fff1bd;
+    font-family: 'VT323', monospace;
+    font-size: 26px;
+    line-height: 1;
+}
+
+.teaser-arrow { color: #8fa9c2; font-size: 14px; }
+
+.game-log:not([open]) .activity-sheet { display: none; }
+#game-screen .game-log[open] { max-height: none; overflow: visible; }
+
+#game-screen .game-log[open] .activity-sheet {
+    position: fixed;
+    inset: 54px 12px 12px;
+    z-index: 80;
+    overflow: hidden;
+    border: 1px solid rgba(169, 195, 217, 0.32);
+    border-radius: 18px;
+    background:
+        var(--map-contours),
+        linear-gradient(160deg, #102b46, #071629 82%);
+    background-size: 480px 320px, auto;
+    box-shadow:
+        0 0 0 9999px rgba(3, 8, 18, 0.74),
+        0 26px 80px rgba(0, 0, 0, 0.72),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.activity-sheet { display: flex; height: 100%; flex-direction: column; min-height: 0; }
+
+.activity-sheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(169, 195, 217, 0.18);
+    background: linear-gradient(120deg, rgba(24, 61, 92, 0.78), rgba(14, 27, 47, 0.6));
+}
+
+.activity-sheet-head h3 {
+    margin: 2px 0 0;
+    color: #fff3c4;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+}
+
+.activity-close {
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(169, 195, 217, 0.32);
+    border-radius: 50%;
+    background: rgba(6, 16, 29, 0.66);
+    color: #bad0e5;
+    cursor: pointer;
+    font-size: 21px;
+    line-height: 1;
+}
+
+.activity-close:hover { border-color: #ffdc75; color: #ffdc75; }
+
+.activity-body {
+    display: grid;
+    flex: 1;
+    grid-template-columns: minmax(180px, 0.65fr) minmax(0, 1.35fr);
+    gap: 14px;
+    min-height: 0;
+    padding: 14px 18px 18px;
+}
+
+.activity-feed, .activity-recap { min-height: 0; overflow: auto; }
+
+.activity-feed h4 {
+    margin: 0 0 8px;
+    color: #9ee0bd;
+    font-family: system-ui, sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+}
+
+.activity-feed .log-messages { max-height: none; }
+
+.activity-recap .point-recap { margin: 0; animation: none; }
+.activity-recap .recap-grid { max-height: none; }
+
+.recap-empty {
+    margin: 0;
+    padding: 22px 16px;
+    border: 1px dashed rgba(169, 195, 217, 0.24);
+    border-radius: 14px;
+    color: #9fb8cf;
+    font-family: system-ui, sans-serif;
+    font-size: 11px;
+    text-align: center;
+}
+
+@media (min-width: 900px) {
+    #game-screen > .pixel-border { grid-template-rows: auto auto auto auto auto; }
+    #game-screen .game-area { grid-row: 2 / 6; }
+    #game-screen .recap-teaser { grid-column: 1; grid-row: 5; margin: -4px 0 0; }
+}
+
+@media (max-width: 899px) {
+    #game-screen .game-log[open] .activity-sheet { inset: 54px 8px 8px; border-radius: 14px; }
+    .activity-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); overflow: auto; }
+    .activity-feed { max-height: 150px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .recap-teaser button { transition: none !important; }
+}
+
 /* Match result + field stats -------------------------------------------- */
 .match-stats-btn {
     margin-right: 10px;

@@ -274,19 +274,26 @@ function pngFixture() {
                 // and the crib, and the whole teaching layer can be switched off.
                 const recap = await page.evaluate(() => ({
                     hidden: document.getElementById('point-recap').hidden,
+                    inActivity: Boolean(document.getElementById('point-recap')?.closest('#game-log')),
                     entries: document.querySelectorAll('.recap-entry').length,
                     handCardCounts: [...document.querySelectorAll('.recap-entry:not(.crib)')].map(entry => entry.querySelectorAll('.recap-card').length),
                     cribCardCount: document.querySelector('.recap-entry.crib')?.querySelectorAll('.recap-card').length || 0,
                     expectedCribCards: window.game.engine.playerCount === 2 ? 5 : 4,
                     explanations: document.querySelectorAll('.recap-lines em').length,
+                    teaserHidden: document.getElementById('recap-teaser').hidden,
+                    teaserTotal: document.getElementById('recap-teaser-total').textContent.trim(),
+                    recapTotal: document.querySelector('.recap-head-actions b')?.textContent.trim() || '',
                     toggle: document.getElementById('point-recap-toggle').textContent.trim(),
                     pressed: document.getElementById('point-recap-toggle').getAttribute('aria-pressed')
                 }));
                 assert.equal(recap.hidden, false, 'Counted hands open a point recap');
+                assert.equal(recap.inActivity, true, 'Point recap lives under Game activity in the lower-left rail');
                 assert.ok(recap.entries >= 2, 'Point recap keeps both the counted hands and crib together');
                 assert.ok(recap.handCardCounts.length > 0 && recap.handCardCounts.every(count => count === 5), 'Every hand recap shows four scored cards plus the starter');
                 assert.equal(recap.cribCardCount, recap.expectedCribCards, 'Crib recap shows one discarded card per player plus the starter');
                 assert.ok(recap.explanations > 0, 'Point recap teaches what each scoring line means');
+                assert.equal(recap.teaserHidden, false, 'A compact recap teaser sits under Game activity');
+                assert.equal(recap.teaserTotal, recap.recapTotal, 'Recap teaser shows the same total as the full breakdown');
                 assert.match(recap.toggle, /RECAP ON/, 'Point recap is on by default');
                 assert.equal(recap.pressed, 'true', 'Recap toggle exposes its state to assistive tech');
 
@@ -313,6 +320,28 @@ function pngFixture() {
                 assert.equal(recapOn.enabled, true, 'Recap can be re-enabled');
                 assert.equal(recapOn.hidden, false, 'Re-enabled recap restores the last teaching panel');
                 assert.equal(recapOn.stored, 'on', 'Re-enabled preference persists');
+
+                // Game activity opens a sheet over the table with the last hands.
+                await page.locator('#recap-teaser-btn').click();
+                const activity = await page.evaluate(() => {
+                    const log = document.getElementById('game-log');
+                    const sheet = document.querySelector('.activity-sheet');
+                    const shell = document.querySelector('#game-screen > .pixel-border').getBoundingClientRect();
+                    const box = sheet.getBoundingClientRect();
+                    const recapBox = document.getElementById('point-recap').getBoundingClientRect();
+                    return {
+                        open: log.open,
+                        sheetVisible: Boolean(sheet && sheet.offsetParent),
+                        coversShell: box.width >= shell.width - 32 && box.height >= shell.height - 90,
+                        recapVisible: recapBox.width > 0 && recapBox.height > 0
+                    };
+                });
+                assert.equal(activity.open, true, 'Recap teaser opens Game activity');
+                assert.equal(activity.sheetVisible, true, 'Game activity renders its overlay sheet');
+                assert.equal(activity.coversShell, true, 'Game activity lays over the game board');
+                assert.equal(activity.recapVisible, true, 'Last-hand breakdown is visible in the overlay');
+                await page.locator('#activity-close').click();
+                assert.equal(await page.evaluate(() => document.getElementById('game-log').open), false, 'Game activity closes without hiding the game');
 
                 // A finished match must not dead-end: verify the result card,
                 // the full stats view, and one-click rematch from the result.
