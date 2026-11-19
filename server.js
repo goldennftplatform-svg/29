@@ -692,6 +692,35 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // LitVM settlement — signs and broadcasts Settlement.settle with the house
+    // key. DISABLED unless LITVM_SETTLEMENT_ADDRESS + LITVM_HOUSE_KEY are set;
+    // requires the admin bearer token, exactly like payout. Body:
+    // { matchId: 0x<32B>, winner: 0x<20B> }
+    if (p === '/api/wallet/settle' && req.method === 'POST') {
+        if (!LTC.litvm.config.settlement) {
+            sendJson(res, 501, { success: false, error: 'settlement disabled (set LITVM_SETTLEMENT_ADDRESS)' });
+            return;
+        }
+        const auth = bearer(req);
+        if (!ADMIN || auth !== ADMIN) {
+            sendJson(res, 401, { success: false, error: 'unauthorized' });
+            return;
+        }
+        readBody(req).then(async (body) => {
+            try {
+                if (!body || !body.matchId || !body.winner) {
+                    sendJson(res, 400, { success: false, error: 'matchId and winner required' });
+                    return;
+                }
+                const result = await LTC.litvm.settle({ matchId: body.matchId, winner: body.winner });
+                sendJson(res, 200, { success: true, ...result, network: LTC.litvm.config.gasToken });
+            } catch (e) {
+                sendJson(res, 422, { success: false, error: e.message });
+            }
+        });
+        return;
+    }
+
     // Player wallet balance by playerId (server derives the address).
     if (p === '/api/wallet/player' && req.method === 'GET') {
         const playerId = url.searchParams.get('playerId');

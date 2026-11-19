@@ -69,6 +69,13 @@ function req(method, api, { body, token } = {}) {
     ok('aggregator lists 3 providers', Array.isArray(cfg.body.providers) && cfg.body.providers.length === 3, cfg.body.providers.map((p) => p.id).join(','));
     ok('LitVM provider pins LiteForge chain 4441', cfg.body.providers.some((p) => p.id === 'litvm' && p.chainId === 4441));
 
+    // On-chain settlement is deliberately gated: no contract/key in this test
+    // environment, so the admin-only endpoint must refuse before it can sign.
+    const settleOff = await req('POST', 'wallet/settle', {
+        body: { matchId: '0x' + '1'.repeat(64), winner: '0x' + '2'.repeat(40) }
+    });
+    ok('on-chain settlement stays disabled without contract + house key', settleOff.status === 501, 'status ' + settleOff.status);
+
     // 2) register two players; claims mint points from mocked confirmed LTC
     const alice = await req('POST', 'auth/register', { body: { email: 'alice@ltc.dev', password: 'secret-pass-123' } });
     const bob = await req('POST', 'auth/register', { body: { email: 'bob@ltc.dev', password: 'secret-pass-123' } });
