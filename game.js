@@ -22,8 +22,197 @@ class CribbageGame {
         // Server-escrowed AI match. Null = free play.
         this.stakedMatch = null;
         this.stakedMatchSettled = false;
+
+        // Match results and stats. A new local/multiplayer game resets these,
+        // so the end-of-match screen always describes the game just played.
+        this.matchStats = this.createMatchStats();
+        this.lastStatsRoundToken = null;
+        this.matchResultToken = null;
+        this.matchResultState = null;
+        this.matchResultShown = false;
+        this.matchSettlement = null;
+        this.statsScoresInitialized = false;
+        this.lastMatchMode = '1v1';
+        this.lastPlayerName = '';
         
         this.setupNetworkListeners();
+    }
+
+    createMatchStats() {
+        return {
+            startedAt: Date.now(),
+            finishedAt: null,
+            rounds: 0,
+            players: {},
+            events: []
+        };
+    }
+
+    resetMatchStats() {
+        this.matchStats = this.createMatchStats();
+        this.lastStatsRoundToken = null;
+        this.matchResultToken = null;
+        this.matchResultState = null;
+        this.matchResultShown = false;
+        this.matchSettlement = null;
+        this.statsScoresInitialized = false;
+        this.updateMatchStatsButton();
+    }
+
+    trackRound(state) {
+        if (!state || state.phase === 'WAITING') return;
+        const token = (state.roundStart || state.scores || []).join('|') + ':' + state.dealerIndex;
+        if (!token || token === this.lastStatsRoundToken) return;
+        this.lastStatsRoundToken = token;
+        this.matchStats.rounds += 1;
+    }
+
+    getPlayerStats(playerIndex, name) {
+        if (!this.matchStats.players[playerIndex]) {
+            this.matchStats.players[playerIndex] = {
+                name: name || 'PLAYER',
+                points: 0,
+                events: 0,
+                playPoints: 0,
+                handPoints: 0,
+                cribPoints: 0,
+                handsCounted: 0,
+                bestHand: 0,
+                bestHandReason: ''
+            };
+        } else if (name) {
+            this.matchStats.players[playerIndex].name = name;
+        }
+        return this.matchStats.players[playerIndex];
+    }
+
+    formatDuration(ms) {
+        const seconds = Math.max(0, Math.floor(ms / 1000));
+        const minutes = Math.floor(seconds / 60);
+        return minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
+    }
+
+    updateMatchStatsButton() {
+        const button = document.getElementById('match-stats-btn');
+        if (!button) return;
+        const hasMatch = Boolean(this.matchResultState) || this.matchStats.events.length > 0;
+        button.hidden = !hasMatch;
+        button.classList.toggle('has-result', Boolean(this.matchResultState));
+        button.textContent = this.matchResultState ? '🏆 RESULT · STATS' : '📊 LIVE STATS';
+    }
+
+    getMatchBoard(source = null) {
+        const state = source || this.matchResultState || this.engine.getState(this.localPlayerIndex);
+        return (state.players || []).map((player, index) => ({
+            index,
+            name: this.escapeHtml(player.name || 'PLAYER'),
+            score: player.score != null ? player.score : ((state.scores || [])[index] || 0),
+            winner: index === state.winner
+        }));
+    }
+
+    getSettlementHtml() {
+        if (!this.stakedMatch) {
+            return '<span class="result-chip free">FREE PLAY · NO STAKE</span>';
+        }
+        const settlement = this.matchSettlement || { status: this.stakedMatchSettled ? 'settled' : 'settling' };
+        if (settlement.status === 'settled') {
+            return `<span class="result-chip paid">SETTLED · ${settlement.payout} TEST PTS · NO CASH VALUE</span>`;
+        }
+        if (settlement.status === 'error') {
+            return `<span class="result-chip pending">PAYOUT PENDING · ${this.escapeHtml(settlement.error || 'Retry available')}</span>`;
+        }
+        return '<span class="result-chip pending">SETTLING TEST-TOKEN ESCROW…</span>';
+    }
+
+    buildResultCardHtml(state) {
+        const board = this.getMatchBoard(state);
+        const winner = board[state.winner] || board[0] || { name: 'PLAYER', score: 0 };
+        const you = board[this.localPlayerIndex] || board[0] || { name: 'PLAYER', score: 0 };
+        const humanWon = state.winner === this.localPlayerIndex;
+        const stats = this.getPlayerStats(this.localPlayerIndex, you.name);
+        const place = board.length > 2 ? (humanWon ? '1ST PLACE · YOU WIN' : 'MATCH COMPLETE') : (humanWon ? 'VICTORY' : 'DEFEAT');
+        const duration = this.formatDuration((this.matchStats.finishedAt || Date.now()) - this.matchStats.startedAt);
+
+        return `
+            <div class="result-card ${humanWon ? 'win' : 'loss'}">
+                <div class="result-aurora" aria-hidden="true"></div>
+                <div class="result-crest" aria-hidden="true">${humanWon ? '🏆' : '🧭'}</div>
+                <p class="result-kicker">${humanWon ? 'THE TRAIL IS YOURS' : 'THE SAFARI GOES ON'}</p>
+                <h2 class="result-title">${place}</h2>
+                <p class="result-sub">${winner.name} reached ${winner.score} first · ${duration} · ${this.matchStats.rounds} ${this.matchStats.rounds === 1 ? 'round' : 'rounds'}</p>
+                <div class="result-scores">
+                    ${board.map(row => `
+                        <div class="result-score ${row.winner ? 'winner' : ''} ${row.index === this.localPlayerIndex ? 'you' : ''}">
+                            <span>${row.winner ? '👑 ' : ''}${row.name}</span>
+                            <b>${row.score}</b>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="result-stats">
+                    <div><b>+${stats.points}</b><span>POINTS SCORED</span></div>
+                    <div><b>${stats.bestHand ? stats.bestHand + ' PTS' : '—'}</b><span>BEST HAND</span></div>
+                    <div><b>${stats.playPoints}</b><span>PLAY POINTS</span></div>
+                </div>
+                <div class="result-settlement">${this.getSettlementHtml()}</div>
+            </div>
+        `;
+    }
+
+    buildStatsHtml(state) {
+        const board = this.getMatchBoard(state);
+        const finished = Boolean(this.matchResultState);
+        const duration = this.formatDuration((this.matchStats.finishedAt || Date.now()) - this.matchStats.startedAt);
+        const totalPoints = board.reduce((sum, row) => sum + (this.matchStats.players[row.index]?.points || 0), 0);
+        const rows = board.map(row => {
+            const stats = this.getPlayerStats(row.index, row.name);
+            return `
+                <tr class="${row.index === this.localPlayerIndex ? 'you' : ''}">
+                    <td data-label="PLAYER">${row.winner ? '👑 ' : ''}${row.name}</td>
+                    <td data-label="FINAL"><b>${row.score}</b></td>
+                    <td data-label="TOTAL">${stats.points}</td>
+                    <td data-label="HAND">${stats.handPoints}</td>
+                    <td data-label="CRIB">${stats.cribPoints}</td>
+                    <td data-label="PLAY">${stats.playPoints}</td>
+                    <td data-label="BEST">${stats.bestHand || '—'}</td>
+                </tr>
+            `;
+        }).join('');
+        const trail = this.matchStats.events.slice(-8).reverse().map(event => `
+            <li>
+                <span class="stats-trail-name">${this.escapeHtml(event.name)}</span>
+                <span class="stats-trail-reason">${this.escapeHtml(event.reason)}</span>
+                <b>+${event.points}</b>
+            </li>
+        `).join('');
+
+        return `
+            <div class="stats-card">
+                <div class="stats-hero">
+                    <span class="stats-icon" aria-hidden="true">📜</span>
+                    <div>
+                        <p class="result-kicker">MATCH FIELD NOTES</p>
+                        <h2>${finished ? 'FINAL STATS' : 'LIVE STATS'}</h2>
+                    </div>
+                </div>
+                <div class="stats-summary">
+                    <span><b>${this.matchStats.rounds}</b> ROUNDS</span>
+                    <span><b>${duration}</b> ELAPSED</span>
+                    <span><b>${totalPoints}</b> TOTAL PTS</span>
+                </div>
+                <div class="stats-table-wrap">
+                    <table class="stats-table">
+                        <thead><tr><th>PLAYER</th><th>FINAL</th><th>TOTAL</th><th>HAND</th><th>CRIB</th><th>PLAY</th><th>BEST</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+                <details class="stats-trail" open>
+                    <summary>Scoring trail <span>last eight points</span></summary>
+                    ${trail ? `<ul>${trail}</ul>` : '<p>No points recorded yet.</p>'}
+                </details>
+                <p class="stats-note">Stats cover this match only. A new game starts a fresh field journal.</p>
+            </div>
+        `;
     }
 
     setupNetworkListeners() {
@@ -147,6 +336,7 @@ class CribbageGame {
             return;
         }
         this.clearStakedMatch();
+        this.resetMatchStats();
         this.isSinglePlayer = false;
         this.aiPlayers.clear();
         this.tableId = result.tableId;
@@ -208,19 +398,26 @@ class CribbageGame {
     async finishStakedMatch(state, force = false) {
         if (!this.stakedMatch) return;
         if (this.stakedMatchSettled && !force) return;
-        if (state.phase !== 'GAME_OVER' || state.winner == null) return;
+        if (!state || state.phase !== 'GAME_OVER' || state.winner == null) return;
         this.stakedMatchSettled = true;
 
         const winnerId = state.winner === 0 ? this.stakedMatch.humanId
             : state.winner === 1 ? this.stakedMatch.aiId : null;
-        if (!winnerId) return;
+        if (!winnerId) {
+            this.setSettlementError('No winning seat was reported.');
+            return;
+        }
 
         // Staked play is only enabled when wallet.js sees this same-origin relay.
         // Using config.relayUrl here would send the local session token to prod.
         const relay = String(window.location.origin).replace(/\/$/, '');
         let token = '';
         try { token = localStorage.getItem('litecrib_auth_token') || ''; } catch (e) {}
-        if (!token) return;
+        if (!token) {
+            this.stakedMatchSettled = false;
+            this.setSettlementError('Sign in to settle this test-token match.');
+            return;
+        }
 
         try {
             const response = await fetch(relay + '/api/games/match/' + encodeURIComponent(this.stakedMatch.id) + '/resolve', {
@@ -236,29 +433,151 @@ class CribbageGame {
             const cfg = window.LITECRIB_CONFIG || {};
             const perLtc = (cfg.pricing && cfg.pricing.pointsPerTestLtc) || cfg.pointsPerTestLtc || 1000;
             const tLtc = (match.payout / perLtc).toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+            this.matchSettlement = {
+                status: 'settled',
+                payout: match.payout,
+                fee: match.fee,
+                pot: match.pot,
+                tLtc,
+                humanWon
+            };
             this.addLogEntry(humanWon
                 ? 'Settled: you won ' + match.payout + ' test pts (' + tLtc + ' tLTC). House fee ' + match.fee + ' pts.'
                 : 'Settled: AI bankroll won ' + match.payout + ' pts. House fee ' + match.fee + ' pts.', 'system');
             window.dispatchEvent(new CustomEvent('litecrib:settled', { detail: result }));
-            this.showModal('MATCH SETTLED', `
-                <p><strong>${humanWon ? 'YOU WON' : 'AI BANKROLL WON'}</strong></p>
-                <p>Pot ${match.pot} pts · house fee ${match.fee} pts · payout ${match.payout} pts${humanWon ? ' (' + tLtc + ' tLTC)' : ''}.</p>
-                <p>Your LITEcrib credit balance has been updated on the server.</p>
-            `, [{ text: 'OK', action: () => this.hideModal(), class: 'primary' }]);
+            this.refreshVisibleResult();
         } catch (e) {
             this.stakedMatchSettled = false;
-            this.showModal('SETTLEMENT PENDING', `
-                <p>The game finished, but the server could not record the result: ${this.escapeHtml(e.message || 'network error')}.</p>
-                <p>Keep this page open and retry. The escrow stays on the server until it settles.</p>
-            `, [
-                { text: 'RETRY', class: 'primary', action: () => this.finishStakedMatch(state, true) },
-                { text: 'CLOSE', action: () => this.hideModal() }
-            ]);
+            this.setSettlementError(e.message || 'network error');
         }
+    }
+
+    setSettlementError(message) {
+        this.matchSettlement = { status: 'error', error: String(message || 'Settlement failed') };
+        this.refreshVisibleResult();
+    }
+
+    refreshVisibleResult() {
+        this.updateMatchStatsButton();
+        const overlay = document.getElementById('modal-overlay');
+        const header = document.getElementById('modal-header');
+        if (overlay && header && !overlay.classList.contains('hidden') && header.textContent === 'MATCH RESULT') {
+            this.renderMatchResultModal();
+        }
+    }
+
+    showMatchResult(state) {
+        if (!state || state.phase !== 'GAME_OVER' || state.winner == null) return;
+        const token = state.winner + '|' + (state.scores || []).join(',');
+        if (this.matchResultToken === token) return;
+        this.matchResultToken = token;
+        this.matchResultShown = true;
+        this.matchStats.finishedAt = Date.now();
+        this.matchResultState = {
+            phase: 'GAME_OVER',
+            winner: state.winner,
+            scores: [...(state.scores || [])],
+            players: (state.players || []).map(p => ({ name: p.name, score: p.score }))
+        };
+        this.updateMatchStatsButton();
+        this.renderMatchResultModal();
+        if (this.stakedMatch && !this.stakedMatchSettled) {
+            this.matchSettlement = { status: 'settling' };
+            this.finishStakedMatch(this.matchResultState);
+        }
+    }
+
+    renderMatchResultModal() {
+        if (!this.matchResultState) return;
+        const needsRetry = this.stakedMatch && this.matchSettlement?.status === 'error';
+        const actions = [];
+        if (needsRetry) {
+            actions.push({ text: 'RETRY PAYOUT', class: 'primary', action: () => this.finishStakedMatch(this.matchResultState, true) });
+        }
+        actions.push(
+            { text: this.isSinglePlayer ? 'REMATCH' : 'NEW TABLE', class: needsRetry ? '' : 'primary', action: () => this.playAgain() },
+            { text: 'VIEW STATS', action: () => this.showMatchStats() },
+            { text: 'BACK TO LOBBY', action: () => this.returnToLobby() }
+        );
+        this.showModal('MATCH RESULT', this.buildResultCardHtml(this.matchResultState), actions, { className: 'result-modal' });
+    }
+
+    showMatchStats() {
+        const state = this.matchResultState || this.engine.getState(this.localPlayerIndex);
+        const finished = Boolean(this.matchResultState);
+        this.showModal(finished ? 'MATCH STATS' : 'MATCH STATS · LIVE', this.buildStatsHtml(state), [
+            { text: finished ? (this.isSinglePlayer ? 'REMATCH' : 'NEW TABLE') : 'BACK TO GAME', class: 'primary', action: () => finished ? this.playAgain() : this.hideModal() },
+            { text: finished ? 'BACK TO RESULT' : 'CLOSE', action: () => finished ? this.renderMatchResultModal() : this.hideModal() }
+        ], { className: 'stats-modal' });
+    }
+
+    showLastMatchResult() {
+        if (this.matchResultState) this.renderMatchResultModal();
+        else this.showMatchStats();
+    }
+
+    async playAgain() {
+        if (this.stakedMatch && this.matchSettlement?.status !== 'settled') {
+            this.showModal('SETTLE THIS MATCH FIRST', `
+                <p>The test-token escrow is still open. Retry the payout so the balance is correct before arming another stake.</p>
+                <p>Test tokens have no cash value.</p>
+            `, [
+                { text: 'RETRY PAYOUT', class: 'primary', action: () => this.finishStakedMatch(this.matchResultState, true) },
+                { text: 'VIEW STATS', action: () => this.showMatchStats() },
+                { text: 'BACK TO LOBBY', action: () => this.returnToLobby() }
+            ]);
+            return;
+        }
+
+        const name = this.lastPlayerName || document.getElementById('player-name')?.value.trim().toUpperCase() || 'PLAYER';
+        this.hideModal();
+        if (!this.isSinglePlayer) {
+            await this.createTable(this.lastMatchMode || '1v1');
+            return;
+        }
+
+        if (this.stakedMatch) {
+            const wallet = window.LITEcribWallet;
+            if (wallet && wallet.isConnected()) {
+                const result = await wallet.createAiMatch();
+                if (result.ok) {
+                    this.startStakedAiMatch(result.data, name);
+                    wallet.status('STAKED — WINNER TAKES ' + result.data.stake.winnerPoints + ' TEST PTS');
+                    return;
+                }
+                this.showModal('TOKEN REMATCH FAILED', `
+                    <p>${this.escapeHtml(result.error || 'Could not arm another test-token stake.')}</p>
+                    <p>You can play a free rematch instead, or review the match you just finished.</p>
+                `, [
+                    { text: 'PLAY FREE', class: 'primary', action: () => { this.clearStakedMatch(); this.startFreeMatch(name); } },
+                    { text: 'VIEW RESULT', action: () => this.renderMatchResultModal() }
+                ]);
+                return;
+            }
+        }
+
+        this.clearStakedMatch();
+        this.startFreeMatch(name);
+    }
+
+    startFreeMatch(name) {
+        this.isSinglePlayer = true;
+        this.aiPlayers.clear();
+        this.setupLocalGame(this.lastMatchMode || '1v1', name);
+    }
+
+    returnToLobby() {
+        this.hideModal();
+        document.getElementById('game-screen').classList.remove('active');
+        document.getElementById('landing-screen').classList.add('active');
+        this.loadTables();
     }
 
     setupLocalGame(mode, playerName) {
         const playerCount = mode === '1v1' ? 2 : 3;
+        this.lastMatchMode = mode;
+        this.lastPlayerName = playerName;
+        this.resetMatchStats();
         this.engine = new CribbageEngine(playerCount);
         
         // Add human player
@@ -322,6 +641,9 @@ class CribbageGame {
 
     joinGame(tableId) {
         this.tableId = tableId;
+        this.lastMatchMode = this.network.getTableList().find(t => t.id === tableId)?.mode || '1v1';
+        this.lastPlayerName = document.getElementById('player-name')?.value.trim().toUpperCase() || '';
+        this.resetMatchStats();
         document.getElementById('landing-screen').classList.remove('active');
         document.getElementById('game-screen').classList.add('active');
         
@@ -337,6 +659,8 @@ class CribbageGame {
 
     handleStateUpdate(state) {
         if (!state || !Array.isArray(state.players) || this.isSinglePlayer) return;
+        const previousScores = Array.isArray(this.engine.scores) ? [...this.engine.scores] : [];
+        const previousPhase = this.engine.phase;
         this.engine.players = state.players;
         this.engine.playerCount = this.network.getTableList().find(t => t.id === this.network.tableId)?.mode === '3player' ? 3 : 2;
         if (state.phase !== 'WAITING') {
@@ -357,6 +681,19 @@ class CribbageGame {
         this.engine.dealerIndex = state.dealerIndex;
         this.engine.currentPlayerIndex = state.currentPlayer;
         this.engine.scores = state.scores;
+        // Remote points arrive as whole state snapshots, so derive scoring
+        // events from the score delta before replacing the old scores. The
+        // first snapshot only seeds the baseline; joining late must not count
+        // the whole board as one scoring play.
+        if (this.statsScoresInitialized) {
+            const scoringSource = previousPhase === 'COUNT_CRIB' ? 'CRIB'
+                : previousPhase === 'COUNT_HAND' ? 'HAND' : 'PLAY';
+            state.players.forEach((player, i) => {
+                const delta = (state.scores[i] || 0) - (previousScores[i] || 0);
+                if (delta > 0) this.recordScoreEvent(state, i, delta, `Scored during ${scoringSource.toLowerCase()}`, scoringSource);
+            });
+        }
+        this.statsScoresInitialized = true;
         this.engine.pegs = state.players.map(p => p.pegs || [0, 0]);
         this.engine.roundStartScores = state.roundStart || state.scores;
         this.engine.crib = (state.crib || []).map(s => Card.fromString(s));
@@ -371,6 +708,7 @@ class CribbageGame {
     }
 
     renderGameState(state) {
+        this.trackRound(state);
         // Update mode badge
         const mode = state.players.length === 2 ? '1v1' : '3P';
         document.getElementById('mode-badge').textContent = mode;
@@ -399,8 +737,9 @@ class CribbageGame {
         // Update play dashboard
         this.renderPlayDashboard(state);
 
-        // A staked game settles from the real winner, never from a guess.
-        if (state.phase === 'GAME_OVER') this.finishStakedMatch(state);
+        // The result screen owns settlement display so players always get one
+        // clear finish: score, stats, rematch, and escrow status in one place.
+        if (state.phase === 'GAME_OVER') this.showMatchResult(state);
     }
 
     buildBoardGeo() {
@@ -895,20 +1234,33 @@ class CribbageGame {
         }
     }
 
-    recordScoreEvent(state, playerIndex, points, reason) {
+    recordScoreEvent(state, playerIndex, points, reason, source = 'PLAY') {
         if (!points || points <= 0) return;
         const name = state.players[playerIndex]?.name || 'PLAYER';
+        const text = reason || `${points} pt${points > 1 ? 's' : ''}`;
         // Back peg = where the front peg sat right before this event landed.
         this.lastPegBefore[playerIndex] = Math.max(0, state.scores[playerIndex] - points);
-        this.lastScoreEvent = {
-            playerIndex,
-            name,
-            points,
-            reason: reason || `${points} pt${points > 1 ? 's' : ''}`,
-            ts: Date.now()
-        };
+        this.lastScoreEvent = { playerIndex, name, points, reason: text, ts: Date.now() };
         this.scoreFeed.push(this.lastScoreEvent);
         if (this.scoreFeed.length > 40) this.scoreFeed.shift();
+
+        const stats = this.getPlayerStats(playerIndex, name);
+        stats.points += points;
+        stats.events += 1;
+        if (source === 'HAND') {
+            stats.handPoints += points;
+            stats.handsCounted += 1;
+            if (points > stats.bestHand) {
+                stats.bestHand = points;
+                stats.bestHandReason = text;
+            }
+        } else if (source === 'CRIB') {
+            stats.cribPoints += points;
+        } else {
+            stats.playPoints += points;
+        }
+        this.matchStats.events.push({ playerIndex, name, points, reason: text, source, ts: Date.now() });
+        this.updateMatchStatsButton();
     }
 
     renderPlayDashboard(state) {
@@ -1093,14 +1445,14 @@ class CribbageGame {
                 const desc = r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : 'no points';
                 this.addLogEntry(`${who} counted hand: ${desc} (${r.handResult.points} pts)`, 'score');
                 this.recordScoreEvent(state, r.handPlayer, r.handResult.points,
-                    r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : `${r.handResult.points} pts`);
+                    r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : `${r.handResult.points} pts`, 'HAND');
             }
             if (r.dealerResult) {
                 const who = this.engine.players[r.dealerPlayer].name;
                 const desc = r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : 'no points';
                 this.addLogEntry(`${who} counted hand: ${desc} (${r.dealerResult.points} pts)`, 'score');
                 this.recordScoreEvent(state, r.dealerPlayer, r.dealerResult.points,
-                    r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : `${r.dealerResult.points} pts`);
+                    r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : `${r.dealerResult.points} pts`, 'HAND');
             }
             if (r.cribResult) {
                 const desc = r.cribResult.breakdown.length ? r.cribResult.breakdown.join('; ') : 'no points';
@@ -1108,7 +1460,7 @@ class CribbageGame {
                 const who = this.engine.players[cribPlayer] ? this.engine.players[cribPlayer].name : 'Dealer';
                 this.addLogEntry(`${who} counted crib: ${desc} (${r.cribResult.points} pts)`, 'score');
                 this.recordScoreEvent(state, cribPlayer, r.cribResult.points,
-                    r.cribResult.breakdown.length ? 'CRIB: ' + r.cribResult.breakdown.join('; ') : 'no crib points');
+                    r.cribResult.breakdown.length ? 'CRIB: ' + r.cribResult.breakdown.join('; ') : 'no crib points', 'CRIB');
             }
         }
         
@@ -1263,14 +1615,14 @@ checkAITurn(state) {
                 const desc = r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : 'no points';
                 this.addLogEntry(`${who} counted hand: ${desc} (${r.handResult.points} pts)`, 'score');
                 this.recordScoreEvent(fresh, r.handPlayer, r.handResult.points,
-                    r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : `${r.handResult.points} pts`);
+                    r.handResult.breakdown.length ? r.handResult.breakdown.join('; ') : `${r.handResult.points} pts`, 'HAND');
             }
             if (r.dealerResult) {
                 const who = this.engine.players[r.dealerPlayer].name;
                 const desc = r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : 'no points';
                 this.addLogEntry(`${who} counted hand: ${desc} (${r.dealerResult.points} pts)`, 'score');
                 this.recordScoreEvent(fresh, r.dealerPlayer, r.dealerResult.points,
-                    r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : `${r.dealerResult.points} pts`);
+                    r.dealerResult.breakdown.length ? r.dealerResult.breakdown.join('; ') : `${r.dealerResult.points} pts`, 'HAND');
             }
             if (r.cribResult) {
                 const desc = r.cribResult.breakdown.length ? r.cribResult.breakdown.join('; ') : 'no points';
@@ -1278,7 +1630,7 @@ checkAITurn(state) {
                 const who = this.engine.players[cribPlayer] ? this.engine.players[cribPlayer].name : 'Dealer';
                 this.addLogEntry(`${who} counted crib: ${desc} (${r.cribResult.points} pts)`, 'score');
                 this.recordScoreEvent(fresh, cribPlayer, r.cribResult.points,
-                    r.cribResult.breakdown.length ? 'CRIB: ' + r.cribResult.breakdown.join('; ') : 'no crib points');
+                    r.cribResult.breakdown.length ? 'CRIB: ' + r.cribResult.breakdown.join('; ') : 'no crib points', 'CRIB');
             }
         }
 
@@ -1319,9 +1671,10 @@ checkAITurn(state) {
         }
     }
 
-    showModal(title, content, actions) {
+    showModal(title, content, actions, options = {}) {
         document.getElementById('modal-header').textContent = title;
         document.getElementById('modal-content').innerHTML = content;
+        document.getElementById('modal').className = 'modal pixel-border ' + (options.className || '').trim();
         
         const actionsContainer = document.getElementById('modal-actions');
         actionsContainer.innerHTML = actions.map(a => 

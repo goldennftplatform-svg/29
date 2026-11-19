@@ -60,6 +60,12 @@ function setupEventListeners() {
         game.setupLocalGame(mode, name);
     });
 
+    // Result / stats replay from the game header. Available live during a match
+    // and after the result card has been dismissed.
+    document.getElementById('match-stats-btn')?.addEventListener('click', () => {
+        game.showLastMatchResult();
+    });
+
     // Create table button (on landing)
     document.addEventListener('click', (e) => {
         if (e.target.id === 'create-table-btn') {

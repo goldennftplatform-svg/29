@@ -66,7 +66,7 @@ function pngFixture() {
     // Pages deploys the whole commit atomically, but WHICH files differ changes
     // per commit: gating on game.js alone let a ?v= bump in index.html run the
     // browser against the previous deployment. Every file the page loads must land.
-    const watch = ['index.html', 'styles.css', 'app-shell.css', 'map-atmosphere.css', 'map-grass.svg', 'map-contours.svg', 'game.js', 'cribbage-engine.js', 'config.js', 'network.js', 'wallet.js', 'metamask.js', 'wallet-dropdown.css', 'wallet-setup.html'];
+    const watch = ['index.html', 'styles.css', 'app-shell.css', 'map-atmosphere.css', 'map-grass.svg', 'map-contours.svg', 'game.js', 'main.js', 'cribbage-engine.js', 'config.js', 'network.js', 'wallet.js', 'metamask.js', 'wallet-dropdown.css', 'wallet-setup.html'];
     const expected = new Map(watch.map(f => [f, fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n')]));
     let published = false;
     for (let i = 0; i < 60; i++) {
@@ -132,11 +132,15 @@ function pngFixture() {
                         modeTexture: style('.mode-card').backgroundImage,
                         buttonRadius: parseFloat(style('#play-ai-btn').borderTopLeftRadius),
                         engineSrc: src('cribbage-engine.js'),
-                        gameSrc: src('game.js')
+                        gameSrc: src('game.js'),
+                        mainSrc: src('main.js'),
+                        mapSrc: document.querySelector('link[href*="map-atmosphere.css"]')?.href || ''
                     };
                 });
                 assert.match(shell.engineSrc, /go-pass/, 'Scoring engine uses a fresh cache-busting version');
                 assert.match(shell.gameSrc, /scoring-shell/, 'Game UI uses a fresh cache-busting version');
+                assert.match(shell.mainSrc, /token-play/, 'Entry point uses a fresh cache-busting version');
+                assert.match(shell.mapSrc, /living-atlas/, 'Living-atlas layer uses a fresh cache-busting version');
                 assert.match(shell.bodyImage, /gradient/, 'Landing uses a layered gradient app backdrop');
                 assert.match(shell.moss, /^#/, 'Living-atlas palette is loaded');
                 assert.match(shell.bodyTexture, /map-grass\.svg/, 'Ambient grass texture sits behind the app');
@@ -266,6 +270,47 @@ function pngFixture() {
                 assert.ok(counted > 0, 'Human counted through the UI');
                 assert.equal(await page.evaluate(() => game.engine.phase), 'DISCARD', 'Scoring completes and the next hand is dealt');
                 await page.screenshot({ path: 'public-evidence/' + label + '.png', fullPage: true });
+
+                // A finished match must not dead-end: verify the result card,
+                // the full stats view, and one-click rematch from the result.
+                await page.evaluate(() => {
+                    const engine = window.game.engine;
+                    engine.scores = engine.players.map((_, i) => i === 0 ? 121 : 40 + i);
+                    engine.winner = 0;
+                    engine.phase = 'GAME_OVER';
+                    window.game.recordScoreEvent(engine.getState(0), 0, 8, 'Regression hand', 'HAND');
+                    window.game.renderGameState(engine.getState(0));
+                });
+                await page.waitForSelector('#modal-overlay:not(.hidden) .result-card');
+                const resultCard = await page.evaluate(() => ({
+                    header: document.getElementById('modal-header').textContent,
+                    modalClass: document.getElementById('modal').className,
+                    title: document.querySelector('.result-title')?.textContent || '',
+                    scoreRows: document.querySelectorAll('.result-score').length,
+                    statTiles: document.querySelectorAll('.result-stats > div').length,
+                    actions: [...document.querySelectorAll('#modal-actions button')].map(button => button.dataset.action),
+                    statsButtonHidden: document.getElementById('match-stats-btn').hidden
+                }));
+                assert.equal(resultCard.header, 'MATCH RESULT', 'Winning or losing opens a dedicated result screen');
+                assert.match(resultCard.modalClass, /result-modal/, 'Result screen uses the polished result styling');
+                assert.match(resultCard.title, /VICTORY|1ST PLACE/, 'Result screen names the outcome');
+                assert.equal(resultCard.scoreRows, mode === '1v1' ? 2 : 3, 'Result screen shows every final score');
+                assert.equal(resultCard.statTiles, 3, 'Result screen surfaces headline stats immediately');
+                assert.ok(resultCard.actions.includes('REMATCH'), 'Result screen offers one-click rematch');
+                assert.ok(resultCard.actions.includes('VIEW STATS'), 'Result screen offers a stats path');
+                assert.equal(resultCard.statsButtonHidden, false, 'Header keeps stats one click away after the modal closes');
+
+                await page.locator('#modal-actions [data-action="VIEW STATS"]').click();
+                await page.waitForSelector('.stats-table tbody tr');
+                assert.equal(await page.locator('.stats-table tbody tr').count(), mode === '1v1' ? 2 : 3, 'Stats view covers every player');
+                assert.ok(await page.locator('.stats-trail li').count() > 0, 'Stats view includes a scoring trail');
+                await page.locator('#modal-actions [data-action="BACK TO RESULT"]').click();
+                await page.waitForSelector('.result-card');
+
+                await page.locator('#modal-actions [data-action="REMATCH"]').click();
+                await page.waitForFunction(() => window.game.engine.phase === 'DISCARD' && document.getElementById('modal-overlay').classList.contains('hidden'));
+                assert.equal(await page.evaluate(() => window.game.matchResultShown), false, 'Rematch clears the old result state');
+
                 assert.deepEqual(errors, [], 'No uncaught browser errors');
                 console.log(label + ': public landing, buttons, discard, play, count and next hand PASS');
             } finally {
