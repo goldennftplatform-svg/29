@@ -79,6 +79,10 @@ class CribbageEngine {
         this.lastPlayIndex = -1;
         this.goCount = 0;
         this.hands = [];
+        // The four cards each player keeps after discarding. Play removes cards
+        // from this.hands, but the hand still scores as those four cards plus
+        // the starter.
+        this.countedHands = [];
         this.winner = null;
         this.roundStartScores = [];
     }
@@ -117,6 +121,7 @@ class CribbageEngine {
         this.currentPlayerIndex = (this.dealerIndex + 1) % this.playerCount;
         this.lastPlayIndex = -1;
         this.goCount = 0;
+        this.countedHands = [];
 
         const deck = new Deck();
         deck.shuffle();
@@ -181,6 +186,8 @@ class CribbageEngine {
         );
 
         if (allDiscarded) {
+            // Freeze the scoring hands before the play phase consumes this.hands.
+            this.countedHands = this.hands.map(hand => hand.map(card => card));
             this.phase = 'STARTER';
             this.currentPlayerIndex = (this.dealerIndex + 1) % this.playerCount;
         }
@@ -378,7 +385,8 @@ class CribbageEngine {
     countHand(playerIndex, isCrib = false) {
         // Nobs must be judged against the four hand/crib cards only; the starter
         // cannot be its own "Jack of the starter suit".
-        const scoringCards = isCrib ? [...this.crib] : [...this.hands[playerIndex]];
+        const heldCards = this.countedHands[playerIndex] || this.hands[playerIndex] || [];
+        const scoringCards = isCrib ? [...this.crib] : [...heldCards];
         const cards = [...scoringCards];
         if (this.starter) cards.push(this.starter);
         

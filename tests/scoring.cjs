@@ -94,6 +94,31 @@ function hasNumericKey(values, key) {
     console.log('PASS  crib flush and run scoring stay correct');
 }
 
+{
+    // The play phase consumes this.hands. Counting must still use the four
+    // cards kept after discarding, not the empty array or a lone starter.
+    const e = makeEngine();
+    e.dealerIndex = 0;
+    e.phase = 'DISCARD';
+    e.hands[0] = hand(['5♦', '5♥', '5♠', 'J♣', '2♣', '3♦']);
+    e.hands[1] = hand(['9♣', '9♦', '10♥', 'Q♠', '4♣', '6♦']);
+    e.starter = Card.fromString('5♣');
+    e.currentPlayerIndex = 1;
+    assert.equal(e.discardToCrib(1, [5, 4]).success, true);
+    e.currentPlayerIndex = 0;
+    assert.equal(e.discardToCrib(0, [5, 4]).success, true);
+    assert.equal(e.phase, 'STARTER');
+
+    // Emulate the end of the play phase: every card has been laid down.
+    e.hands = [[], []];
+    e.phase = 'COUNT_HAND';
+    const r = e.countHand(0);
+    assert.equal(r.points, 29, 'Played cards still score their real hand');
+    assert.equal(r.cards.length, 5, 'Hand recap includes four held cards plus the starter');
+    assert.deepEqual(r.cards, ['5♦', '5♥', '5♠', 'J♣', '5♣']);
+    console.log('PASS  counted hands survive the play phase and recap five cards');
+}
+
 // --- Play / count scoring ----------------------------------------------------
 {
     assert.equal(scorePile(['5♣', '10♥']).points, 2, '15 during play scores 2');
