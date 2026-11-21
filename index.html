@@ -47,6 +47,7 @@
     <link rel="stylesheet" href="wallet-dropdown.css?v=20261121-pwa-mobile3">
     <link rel="stylesheet" href="app-shell.css?v=20261121-pwa-mobile3">
     <link rel="stylesheet" href="map-atmosphere.css?v=20261119-living-atlas-activity3">
+    <link rel="stylesheet" href="leaderboard.css?v=20261121-leaderboard1">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -61,7 +62,10 @@
                         <span class="logo-icon">⚡</span>
                     </div>
                     <p class="tagline">LITECOIN-POWERED 8-BIT CRIBBAGE</p>
-                    <button type="button" class="header-wallet-link" id="wallet-toggle" aria-expanded="false" aria-controls="wallet-menu">WALLET <span aria-hidden="true">▾</span></button>
+                    <div class="header-actions">
+                        <button type="button" class="header-trophy" id="leaderboard-toggle" data-leaderboard-open aria-label="Open leaderboard and top scores"><span aria-hidden="true">🏆</span><span class="trophy-label">TOP</span></button>
+                        <button type="button" class="header-wallet-link" id="wallet-toggle" aria-expanded="false" aria-controls="wallet-menu">WALLET <span aria-hidden="true">▾</span></button>
+                    </div>
                 </header>
 
                 <div class="stake-banner" id="stake-banner" role="status">
@@ -71,6 +75,17 @@
                         <p id="stake-copy">Sign in to the LITEcrib wallet to stake 20 test pts (0.02 tLTC) per 1v1 AI match. Test coins have no cash value.</p>
                     </div>
                 </div>
+
+                <section class="top-score-strip" aria-label="Top score preview">
+                    <span class="top-score-icon" aria-hidden="true">🏆</span>
+                    <div class="top-score-copy">
+                        <span class="top-score-label">TOP SCORE ON THE BOARD</span>
+                        <strong id="top-score-value">29 PTS</strong>
+                        <span class="top-score-who" id="top-score-who">ZEROCOOL</span>
+                        <span class="top-score-note" id="top-score-note">SAMPLE RANK · CLASSIC · 4 DAYS AGO</span>
+                    </div>
+                    <button type="button" class="top-score-open" data-leaderboard-open>VIEW</button>
+                </section>
 
                 <section class="metamask-cta" aria-label="Add LitVM LiteForge to MetaMask">
                     <div>
@@ -150,6 +165,7 @@
                     <section id="wallet-root" aria-label="LiteForge test wallet">
                         <p role="status">Opening wallet…</p>
                     </section>
+                    <button type="button" class="wallet-dropdown-board" data-leaderboard-open>🏆 LEADERBOARD / TOP SCORES</button>
                     <button type="button" class="wallet-dropdown-claim" id="claim-tokens-btn" disabled>CLAIM TEST zkLTC</button>
                     <p class="wallet-dropdown-hint" id="claim-status" role="status">Sign in to check your faucet status.</p>
                     <button type="button" class="wallet-dropdown-metamask" data-litvm-add data-litvm-status="metamask-dropdown-status">ADD LITVM TO METAMASK</button>
@@ -377,6 +393,40 @@
         </div>
     </div>
 
+    <!-- Demo leaderboard. Kept outside .pixel-border so the bottom sheet can
+         never be clipped by the glossy app window on mobile. -->
+    <div class="leaderboard-overlay" id="leaderboard-overlay" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title" hidden>
+        <div class="leaderboard-backdrop"></div>
+        <section class="leaderboard-sheet">
+            <div class="leaderboard-head">
+                <div>
+                    <h2 id="leaderboard-title">HALL OF FAME</h2>
+                    <p>Sample ranks while live scoring rolls out.</p>
+                </div>
+                <button type="button" class="leaderboard-close" aria-label="Close leaderboard">✕</button>
+            </div>
+            <div class="leaderboard-scroll">
+                <p class="leaderboard-demo-note">DEMO DATA — These players and scores are examples, not live results. Test pts have no cash value.</p>
+                <div class="leaderboard-hero">
+                    <span class="hero-crown" aria-hidden="true">👑</span>
+                    <div>
+                        <small>TOP SCORE</small>
+                        <strong id="leaderboard-hero-score">29 PTS</strong>
+                        <span class="hero-name" id="leaderboard-hero-name">ZEROCOOL</span>
+                        <span id="leaderboard-hero-note">Classic · 4 days ago</span>
+                    </div>
+                </div>
+                <div class="leaderboard-tabs" role="tablist" aria-label="Leaderboard board">
+                    <button type="button" role="tab" data-leaderboard-board="all" aria-selected="true">ALL TIME</button>
+                    <button type="button" role="tab" data-leaderboard-board="weekly" aria-selected="false">WEEKLY</button>
+                    <button type="button" role="tab" data-leaderboard-board="friends" aria-selected="false">FRIENDS</button>
+                </div>
+                <ul class="leaderboard-list" id="leaderboard-list"></ul>
+                <p class="leaderboard-foot">SAMPLE DATA · Live ranks arrive after verified games. Test pts have no cash value.</p>
+            </div>
+        </section>
+    </div>
+
     <script src="config.js?v=20261121-pwa-mobile3"></script>
     <script src="country-boards.js?v=country1"></script>
     <script src="player-profile.js?v=country1"></script>
@@ -387,6 +437,7 @@
     <script src="wallet.js?v=20261119-token-play"></script>
     <script src="metamask.js?v=20261118-metamask-network"></script>
     <script src="square.js?v=20261121-pwa-mobile3"></script>
+    <script src="leaderboard.js?v=20261121-leaderboard1"></script>
     <script>
         (function () {
             var toggle = document.getElementById('wallet-toggle');

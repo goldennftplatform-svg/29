@@ -66,7 +66,7 @@ function pngFixture() {
     // Pages deploys the whole commit atomically, but WHICH files differ changes
     // per commit: gating on game.js alone let a ?v= bump in index.html run the
     // browser against the previous deployment. Every file the page loads must land.
-    const watch = ['index.html', 'styles.css', 'app-shell.css', 'map-atmosphere.css', 'map-grass.svg', 'map-contours.svg', 'game.js', 'main.js', 'cribbage-engine.js', 'config.js', 'network.js', 'wallet.js', 'metamask.js', 'square.js', 'wallet-dropdown.css', 'manifest.webmanifest', 'sw.js', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon.svg', 'wallet-setup.html'];
+    const watch = ['index.html', 'styles.css', 'app-shell.css', 'map-atmosphere.css', 'leaderboard.css', 'leaderboard.js', 'map-grass.svg', 'map-contours.svg', 'game.js', 'main.js', 'cribbage-engine.js', 'config.js', 'network.js', 'wallet.js', 'metamask.js', 'square.js', 'wallet-dropdown.css', 'manifest.webmanifest', 'sw.js', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon.svg', 'wallet-setup.html'];
     const expected = new Map(watch.map(f => [f, /\.png$/i.test(f)
         ? fs.readFileSync(f)
         : fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n')]));
@@ -222,6 +222,21 @@ function pngFixture() {
                 assert.match(await page.locator('#stake-copy').innerText(), /20 test pts|test pts/, 'Stake amount is explained');
                 assert.equal(await page.locator('#stake-badge').innerText(), 'FREE PLAY', 'Static visitors see free play, not token play');
                 await page.locator('#wallet-toggle').click();
+                // Demo leaderboard: compact teaser + trophy button, full bottom
+                // sheet on phones. It must be obviously fake and never block play.
+                assert.equal(await page.locator('#leaderboard-toggle').isVisible(), true, 'Trophy button is offered in the lobby');
+                assert.equal(await page.locator('.top-score-strip').isVisible(), true, 'Top-score teaser is visible in the lobby');
+                assert.match(await page.locator('#top-score-who').innerText(), /ZEROCOOL/, 'Top-score teaser shows sample data');
+                await page.locator('#leaderboard-toggle').click();
+                assert.equal(await page.locator('#leaderboard-overlay').isVisible(), true, 'Leaderboard opens from the trophy button');
+                assert.match(await page.locator('.leaderboard-demo-note').innerText(), /DEMO DATA/, 'Leaderboard is clearly labelled as demo data');
+                assert.equal(await page.locator('#leaderboard-list .leaderboard-row').count(), 6, 'All-time board lists sample players');
+                await page.locator('[data-leaderboard-board="weekly"]').click();
+                assert.equal(await page.locator('#leaderboard-list .leaderboard-row').count(), 5, 'Weekly board is selectable');
+                const lbBox = await page.locator('.leaderboard-sheet').boundingBox();
+                assert.ok(lbBox.width <= page.viewportSize().width && lbBox.x >= 0, 'Leaderboard sheet stays inside the mobile viewport');
+                await page.locator('.leaderboard-close').click();
+                assert.equal(await page.locator('#leaderboard-overlay').isVisible(), false, 'Leaderboard closes without affecting the game');
                 // One-click LitVM onboarding must work outside the relay-only
                 // wallet panel, including on a static-host deployment.
                 const metamaskButton = page.locator('.metamask-add');

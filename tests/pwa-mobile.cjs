@@ -27,7 +27,7 @@ assert.match(sw, /const CACHE = 'litecrib-v/, 'Cache is versioned');
 assert.match(sw, /url\.pathname\.startsWith\('\/api\/'\)/, 'Relay/account APIs never enter the cache');
 assert.match(sw, /url\.origin !== self\.location\.origin/, 'Cross-origin Privy/RPC/font requests bypass the cache');
 assert.match(sw, /caches\.match\('\.\/index\.html'\)/, 'Offline navigation falls back to the game shell');
-for (const asset of ['manifest.webmanifest', 'square.js', 'wallet-assets/wallet.js', 'social-preview.png']) {
+for (const asset of ['manifest.webmanifest', 'square.js', 'leaderboard.css', 'leaderboard.js', 'wallet-assets/wallet.js', 'social-preview.png']) {
     assert.ok(sw.includes(asset), 'Service worker pre-caches ' + asset);
 }
 
@@ -50,6 +50,19 @@ assert.match(dropdown, /touch-action: manipulation/, 'Wallet trigger avoids mobi
 const shell = read('app-shell.css');
 assert.match(shell, /env\(safe-area-inset-top/, 'App header respects the iOS safe area');
 assert.match(read('styles.css'), /\.header-wallet-link \{[^}]*min-height: 44px/s, 'Wallet trigger is a 44px touch target');
+
+// Demo leaderboard: mobile-safe entry points and honest fake-data copy.
+const boardCss = read('leaderboard.css');
+const boardJs = read('leaderboard.js');
+assert.match(html, /id="leaderboard-toggle"/, 'Trophy button ships');
+assert.match(html, /id="leaderboard-overlay"/, 'Leaderboard sheet ships');
+assert.match(html, /top-score-strip/, 'Top-score teaser ships');
+assert.match(html, /class="wallet-dropdown-board"/, 'Wallet menu links to the leaderboard');
+assert.match(boardCss, /env\(safe-area-inset-bottom/, 'Bottom sheet respects the iOS home indicator');
+assert.match(boardCss, /@media \(max-width: 700px\)/, 'Leaderboard has a phone layout');
+assert.match(boardCss, /min-height: 44px/, 'Leaderboard controls are touch-sized');
+assert.match(html, /DEMO DATA/, 'Leaderboard tells players the data is fake');
+assert.match(html, /no cash value/, 'Leaderboard keeps test-token disclosure');
 
 // Square seam: present, public-safe, and off by default.
 const cfg = require('../config.js');

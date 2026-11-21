@@ -5,7 +5,7 @@
  * Asset URLs in index.html are explicitly versioned, so bumping CACHE also
  * refreshes the exact files the new page asks for.
  */
-const CACHE = 'litecrib-v20261121-pwa-mobile3';
+const CACHE = 'litecrib-v20261121-leaderboard1';
 
 const ASSETS = [
   './',
@@ -20,6 +20,7 @@ const ASSETS = [
   './wallet-dropdown.css?v=20261121-pwa-mobile3',
   './app-shell.css?v=20261121-pwa-mobile3',
   './map-atmosphere.css?v=20261119-living-atlas-activity3',
+  './leaderboard.css?v=20261121-leaderboard1',
   './map-grass.svg',
   './map-contours.svg',
   './country-boards.js?v=country1',
@@ -30,6 +31,7 @@ const ASSETS = [
   './main.js?v=20261121-pwa-mobile3',
   './config.js?v=20261121-pwa-mobile3',
   './square.js?v=20261121-pwa-mobile3',
+  './leaderboard.js?v=20261121-leaderboard1',
   './wallet.js?v=20261119-token-play',
   './metamask.js?v=20261118-metamask-network',
   './wallet-assets/wallet.js?v=wallet-send-export-20261118',
