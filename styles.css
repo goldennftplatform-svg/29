@@ -116,9 +116,12 @@ header.pixel-header::after {
    the lobby, so the landing screen stays a game menu. */
 .header-wallet-link {
     position: absolute;
-    top: 10px;
-    right: 12px;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px));
     z-index: 2;
+    touch-action: manipulation;
+    min-width: 44px;
+    min-height: 44px;
     font-family: 'Press Start 2P', cursive;
     font-size: 8px;
     line-height: 1;
@@ -137,7 +140,14 @@ header.pixel-header::after {
 }
 
 @media (max-width: 480px) {
-    .header-wallet-link { top: 8px; right: 8px; font-size: 7px; padding: 7px; }
+    .header-wallet-link {
+        top: calc(8px + env(safe-area-inset-top, 0px));
+        right: calc(8px + env(safe-area-inset-right, 0px));
+        min-width: 44px;
+        min-height: 44px;
+        font-size: 7px;
+        padding: 7px;
+    }
 }
 
 .logo {

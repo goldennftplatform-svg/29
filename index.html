@@ -7,7 +7,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="LITEcrib">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦁</text></svg>">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
     <title>LITEcrib — Free 8-Bit Cribbage on LitVM</title>
     <meta name="description" content="Play 8-bit cribbage free in your browser, or connect a LITEcrib wallet for 20-point test-token matches against a funded AI bankroll. Live human tables too.">
     <meta name="author" content="LITEcrib">
@@ -38,11 +41,11 @@
     <script type="application/ld+json">
     {"@context":"https://schema.org","@type":"VideoGame","name":"LITEcrib","description":"Browser cribbage with live 1v1 and 3-player tables, solo AI, and optional 20-point test-token matches against a funded AI bankroll.","url":"https://29.aisp.live/","image":"https://29.aisp.live/social-preview.png?v=1","gamePlatform":"Web browser","applicationCategory":"Game","operatingSystem":"Any","playMode":["SinglePlayer","MultiPlayer"],"inLanguage":"en","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD","availability":"https://schema.org/InStock","url":"https://29.aisp.live/"},"publisher":{"@type":"Organization","name":"LITEcrib","url":"https://29.aisp.live/"}}
     </script>
-    <link rel="stylesheet" href="styles.css?v=20261119-scoring-rejoin">
+    <link rel="stylesheet" href="styles.css?v=20261121-pwa-mobile3">
     <link rel="stylesheet" href="safari-brand.css?v=country1">
     <link rel="stylesheet" href="app-layout.css?v=4">
-    <link rel="stylesheet" href="wallet-dropdown.css?v=20261118-metamask-network">
-    <link rel="stylesheet" href="app-shell.css?v=20261119-glossy-shell">
+    <link rel="stylesheet" href="wallet-dropdown.css?v=20261121-pwa-mobile3">
+    <link rel="stylesheet" href="app-shell.css?v=20261121-pwa-mobile3">
     <link rel="stylesheet" href="map-atmosphere.css?v=20261119-living-atlas-activity3">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 </head>
@@ -374,15 +377,16 @@
         </div>
     </div>
 
-    <script src="config.js?v=20261118-metamask-network"></script>
+    <script src="config.js?v=20261121-pwa-mobile3"></script>
     <script src="country-boards.js?v=country1"></script>
     <script src="player-profile.js?v=country1"></script>
     <script src="game.js?v=20261119-scoring-shell-rejoin3"></script>
     <script src="network.js?v=20261119-rejoin-seat2"></script>
     <script src="cribbage-engine.js?v=20261119-stop-at-121-rejoin"></script>
-    <script src="main.js?v=20261119-token-play-rejoin"></script>
+    <script src="main.js?v=20261121-pwa-mobile3"></script>
     <script src="wallet.js?v=20261119-token-play"></script>
     <script src="metamask.js?v=20261118-metamask-network"></script>
+    <script src="square.js?v=20261121-pwa-mobile3"></script>
     <script>
         (function () {
             var toggle = document.getElementById('wallet-toggle');
@@ -390,7 +394,22 @@
             if (!toggle || !menu) return;
             var loaded = false;
 
+            // Mobile/Safari hardening: the glossy app window uses backdrop-filter
+            // and overflow:hidden, which can clip an absolutely positioned child
+            // (and Safari sometimes refuses to paint it at all). Park the menu on
+            // <body> while open so it escapes every stacking/clipping context.
+            var menuParent = menu.parentNode;
+            var menuSlot = document.createComment('wallet-menu-slot');
+            menuParent.insertBefore(menuSlot, menu);
+
             function setOpen(open) {
+                if (open) {
+                    if (menu.parentNode !== document.body) document.body.appendChild(menu);
+                    menu.classList.add('wallet-menu-floating');
+                } else {
+                    menu.classList.remove('wallet-menu-floating');
+                    if (menu.parentNode !== menuParent) menuParent.insertBefore(menu, menuSlot);
+                }
                 menu.hidden = !open;
                 toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
                 if (!open || loaded) return;
@@ -526,6 +545,14 @@
                 }
             });
         })();
+
+        // PWA shell. Service workers require a secure context; localhost is
+        // allowed for development. Registration failure never blocks the game.
+        if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('./sw.js').catch(function () {});
+            });
+        }
     </script>
 </body>
 </html>

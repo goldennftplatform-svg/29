@@ -51,7 +51,8 @@
         network: network,
         features: {
             paymentsEnabled: true,   // LTC deposit panel in the lobby
-            litvmEnabled: false       // LitVM on-chain settlement (roadmap)
+            litvmEnabled: false,      // LitVM on-chain settlement (roadmap)
+            squareEnabled: false      // Square SDK seam (gated until real credentials/SDK are chosen)
         },
         indexerBase: baseIndexerFor(network),
         baseIndexerFor: baseIndexerFor,
@@ -83,6 +84,15 @@
                 explorer: 'https://explorer.testnet.liteforge.zeeve.net',
                 gasToken: 'zkLTC',
                 live: false
+            },
+            // PUBLIC seam only. No Square application ID, access token or
+            // location ID is ever shipped to the browser. The flag is off until
+            // a real SDK and server-side token exchange are configured.
+            square: {
+                enabled: cfg.features.squareEnabled === true,
+                mode: 'test',
+                currency: 'USD',
+                note: 'Test-token showcase only. No real-money checkout is enabled.'
             }
         };
     };

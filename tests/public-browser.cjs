@@ -66,13 +66,19 @@ function pngFixture() {
     // Pages deploys the whole commit atomically, but WHICH files differ changes
     // per commit: gating on game.js alone let a ?v= bump in index.html run the
     // browser against the previous deployment. Every file the page loads must land.
-    const watch = ['index.html', 'styles.css', 'app-shell.css', 'map-atmosphere.css', 'map-grass.svg', 'map-contours.svg', 'game.js', 'main.js', 'cribbage-engine.js', 'config.js', 'network.js', 'wallet.js', 'metamask.js', 'wallet-dropdown.css', 'wallet-setup.html'];
-    const expected = new Map(watch.map(f => [f, fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n')]));
+    const watch = ['index.html', 'styles.css', 'app-shell.css', 'map-atmosphere.css', 'map-grass.svg', 'map-contours.svg', 'game.js', 'main.js', 'cribbage-engine.js', 'config.js', 'network.js', 'wallet.js', 'metamask.js', 'square.js', 'wallet-dropdown.css', 'manifest.webmanifest', 'sw.js', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon.svg', 'wallet-setup.html'];
+    const expected = new Map(watch.map(f => [f, /\.png$/i.test(f)
+        ? fs.readFileSync(f)
+        : fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n')]));
     let published = false;
     for (let i = 0; i < 60; i++) {
         const checks = await Promise.all([...expected].map(async ([file, want]) => {
             const response = await fetch(url + file + '?revision=' + process.env.GITHUB_SHA + '&attempt=' + i);
-            return response.ok && (await response.text()).replace(/\r\n/g, '\n') === want;
+            if (!response.ok) return false;
+            if (Buffer.isBuffer(want)) {
+                return Buffer.from(await response.arrayBuffer()).equals(want);
+            }
+            return (await response.text()).replace(/\r\n/g, '\n') === want;
         }));
         if (checks.every(Boolean)) { published = true; break; }
         await new Promise(resolve => setTimeout(resolve, 5000));
@@ -142,7 +148,7 @@ function pngFixture() {
                 assert.match(shell.gameSrc, /scoring-shell/, 'Game UI uses a fresh cache-busting version');
                 assert.match(shell.gameSrc, /rejoin/, 'Game UI ships durable seat resume');
                 assert.match(shell.networkSrc, /rejoin-seat2/, 'Network client ships durable identity, seat token and auto-rejoin');
-                assert.match(shell.mainSrc, /token-play/, 'Entry point uses a fresh cache-busting version');
+                assert.match(shell.mainSrc, /pwa-mobile|token-play/, 'Entry point uses a fresh cache-busting version');
                 assert.match(shell.mapSrc, /living-atlas/, 'Living-atlas layer uses a fresh cache-busting version');
                 assert.match(shell.bodyImage, /gradient/, 'Landing uses a layered gradient app backdrop');
                 assert.match(shell.moss, /^#/, 'Living-atlas palette is loaded');
@@ -163,6 +169,53 @@ function pngFixture() {
                 await page.locator('#wallet-toggle').click();
                 assert.equal(await page.locator('#wallet-menu').isVisible(), true, 'Wallet dropdown opens from the main page');
                 assert.equal(await page.locator('#wallet-menu a[href="wallet-setup.html"]').isVisible(), true, 'Testnet wallet setup CTA is offered');
+                // The menu escapes the glossy window's clipping/backdrop-filter
+                // context. This is what makes the dropdown actually tappable on
+                // mobile Safari, not just visible in a desktop click test.
+                const walletMenu = await page.evaluate(() => {
+                    const menu = document.getElementById('wallet-menu');
+                    const toggle = document.getElementById('wallet-toggle');
+                    const menuBox = menu.getBoundingClientRect();
+                    const toggleBox = toggle.getBoundingClientRect();
+                    return {
+                        portaled: menu.parentElement === document.body,
+                        position: getComputedStyle(menu).position,
+                        touchHeight: toggleBox.height,
+                        touchMinHeight: parseFloat(getComputedStyle(toggle).minHeight) || 0,
+                        inViewport: menuBox.left >= 0 && menuBox.right <= document.documentElement.clientWidth && menuBox.bottom <= innerHeight
+                    };
+                });
+                assert.equal(walletMenu.portaled, true, 'Wallet dropdown is portaled to <body> while open');
+                assert.equal(walletMenu.position, 'fixed', 'Wallet dropdown is fixed above app chrome');
+                assert.ok(walletMenu.inViewport, 'Wallet dropdown stays inside the mobile viewport');
+                if (label !== 'desktop') {
+                    assert.ok(walletMenu.touchMinHeight >= 44 && walletMenu.touchHeight >= 40,
+                        'Wallet toggle is a 44px touch target (measured ' + walletMenu.touchHeight + 'px)');
+                }
+                if (label !== 'desktop') {
+                    await page.keyboard.press('Escape');
+                    assert.equal(await page.locator('#wallet-menu').isVisible(), false, 'Escape closes the wallet dropdown');
+                    await page.locator('#wallet-toggle').click();
+                }
+                // Installability is part of the shipped public product: Android
+                // gets a real install prompt and iOS gets Add to Home Screen.
+                const pwa = await page.evaluate(async () => {
+                    const manifestUrl = document.querySelector('link[rel="manifest"]')?.href || '';
+                    const manifest = manifestUrl ? await (await fetch(manifestUrl)).json() : null;
+                    return {
+                        manifestUrl,
+                        display: manifest?.display || '',
+                        icon192: manifest?.icons?.some(i => i.sizes === '192x192') || false,
+                        icon512: manifest?.icons?.some(i => i.sizes === '512x512') || false,
+                        sw: (await navigator.serviceWorker.getRegistrations()).some(r => r.scope === new URL('./', location.href).href)
+                    };
+                });
+                await page.waitForFunction(() => navigator.serviceWorker.getRegistrations().then(regs => regs.some(r => r.scope === new URL('./', location.href).href)), null, { timeout: 15000 });
+                assert.match(pwa.manifestUrl, /manifest\.webmanifest/, 'Web manifest is linked');
+                assert.equal(pwa.display, 'standalone', 'PWA launches in standalone mode');
+                assert.equal(pwa.icon192, true, 'PWA lists a 192px icon');
+                assert.equal(pwa.icon512, true, 'PWA lists a 512px icon');
+                assert.equal(await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).some(r => r.scope === new URL('./', location.href).href)), true, 'Service worker is registered for the game scope');
                 // Token play is disclosed before the first click, even on static
                 // hosting where account staking is unavailable.
                 assert.equal(await page.locator('#stake-banner').isVisible(), true, 'Stake disclosure is visible in the lobby');
